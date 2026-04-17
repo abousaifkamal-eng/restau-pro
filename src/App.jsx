@@ -5,7 +5,8 @@ import { loadFromFirestore, saveToFirestore, subscribeToFirestore } from "./fire
 const INITIAL_DB = {
   restaurants: [
     { id: "r1", name: "Le Bistro Parisien", logo: "🥐", color: "#D4A017", address: "12 Rue de la Paix, Paris" },
-    { id: "r2", name: "La Bella Italia", logo: "🍕", color: "#C0392B", address: "8 Via Roma, Lyon" }
+    { id: "r2", name: "La Bella Italia", logo: "🍕", color: "#C0392B", address: "8 Via Roma, Lyon" },
+    { id: "r3", name: "Layali Al Cham Laeken", logo: "🌙", color: "#8B2500", address: "Rue Fransman 42, 1020 Laeken" }
   ],
   users: [
     { id: "u1", rId: "r1", username: "gerant",  password: "1234", name: "Claire Moreau",  role: "manager", avatar: "📋" },
@@ -13,6 +14,9 @@ const INITIAL_DB = {
     { id: "u3", rId: "r1", username: "caisse",  password: "1234", name: "Sophie Martin",  role: "cashier", avatar: "💳" },
     { id: "u4", rId: "r1", username: "serveur", password: "1234", name: "Lucas Bernard",  role: "waiter",  avatar: "🍽️" },
     { id: "u5", rId: "r2", username: "chef2",   password: "1234", name: "Giovanni Rossi", role: "chef",    avatar: "👨‍🍳" },
+    { id: "u6", rId: "r3", username: "Rkan",    password: "1234", name: "Rkan alssrag",   role: "manager", avatar: "📋" },
+    { id: "u7", rId: "r3", username: "chef3",   password: "1234", name: "Chef Layali",    role: "chef",    avatar: "👨‍🍳" },
+    { id: "u8", rId: "r3", username: "caisse3", password: "1234", name: "Caissier",       role: "cashier", avatar: "💳" },
   ],
   superAdmin: { username: "admin", password: "admin123" },
   menus: {
@@ -31,6 +35,27 @@ const INITIAL_DB = {
       { id: "m10", name: "Pizza Margherita", cat: "Plats",    price: 14,   prep: 18, emoji: "🍕" },
       { id: "m11", name: "Pasta Carbonara",  cat: "Plats",    price: 16,   prep: 15, emoji: "🍝" },
       { id: "m12", name: "Tiramisu",         cat: "Desserts", price: 6.5,  prep: 3,  emoji: "🍰" },
+    ],
+    r3: [
+      { id: "r3m1",  name: "Houmous",          cat: "Mezze",     price: 6.5,  prep: 5,  emoji: "🫘" },
+      { id: "r3m2",  name: "Fattoush",          cat: "Mezze",     price: 7.0,  prep: 8,  emoji: "🥗" },
+      { id: "r3m3",  name: "Moutabal",          cat: "Mezze",     price: 6.5,  prep: 5,  emoji: "🍆" },
+      { id: "r3m4",  name: "Falafel",           cat: "Mezze",     price: 7.5,  prep: 10, emoji: "🧆" },
+      { id: "r3m5",  name: "Kibbeh",            cat: "Mezze",     price: 8.5,  prep: 12, emoji: "🥙" },
+      { id: "r3m6",  name: "Poulet grillé",     cat: "Grillades", price: 16.0, prep: 25, emoji: "🍗" },
+      { id: "r3m7",  name: "Kébab viande",      cat: "Grillades", price: 17.0, prep: 20, emoji: "🥩" },
+      { id: "r3m8",  name: "Kofta",             cat: "Grillades", price: 16.0, prep: 20, emoji: "🍢" },
+      { id: "r3m9",  name: "Mixte grillades",   cat: "Grillades", price: 22.0, prep: 25, emoji: "🍽️" },
+      { id: "r3m10", name: "Shawarma poulet",   cat: "Sandwichs", price: 9.0,  prep: 10, emoji: "🌯" },
+      { id: "r3m11", name: "Shawarma viande",   cat: "Sandwichs", price: 10.0, prep: 10, emoji: "🌯" },
+      { id: "r3m12", name: "Sandwich falafel",  cat: "Sandwichs", price: 7.5,  prep: 8,  emoji: "🥙" },
+      { id: "r3m13", name: "Baklava",           cat: "Desserts",  price: 5.5,  prep: 3,  emoji: "🍯" },
+      { id: "r3m14", name: "Maamoul",           cat: "Desserts",  price: 5.0,  prep: 3,  emoji: "🍪" },
+      { id: "r3m15", name: "Riz au lait",       cat: "Desserts",  price: 5.5,  prep: 3,  emoji: "🍚" },
+      { id: "r3m16", name: "Jus d'orange",      cat: "Boissons",  price: 4.0,  prep: 3,  emoji: "🍊" },
+      { id: "r3m17", name: "Ayran",             cat: "Boissons",  price: 3.5,  prep: 2,  emoji: "🥛" },
+      { id: "r3m18", name: "Thé à la menthe",   cat: "Boissons",  price: 3.0,  prep: 5,  emoji: "🍵" },
+      { id: "r3m19", name: "Café turc",         cat: "Boissons",  price: 3.5,  prep: 5,  emoji: "☕" },
     ]
   },
   orders: [],
@@ -45,6 +70,13 @@ const INITIAL_DB = {
     r2: [
       { id: "i5", name: "Mozzarella", unit: "kg", qty: 6,  min: 2 },
       { id: "i6", name: "Farine",     unit: "kg", qty: 20, min: 8 },
+    ],
+    r3: [
+      { id: "i7", name: "Viande agneau",  unit: "kg", qty: 10, min: 3 },
+      { id: "i8", name: "Poulet",         unit: "kg", qty: 8,  min: 3 },
+      { id: "i9", name: "Huile olive",    unit: "L",  qty: 5,  min: 2 },
+      { id: "i10", name: "Pois chiches", unit: "kg", qty: 6,  min: 2 },
+      { id: "i11", name: "Pain pita",    unit: "pcs", qty: 50, min: 20 },
     ]
   }
 };
@@ -200,11 +232,22 @@ export default function App() {
   const localVersion = useRef(0);
   const remoteVersion = useRef(0);
 
-  // Load initial data from Firestore
+  // Load initial data from Firestore — NEVER overwrite existing Firebase data
   useEffect(() => {
     loadFromFirestore().then(data => {
       if (data) {
-        setDb(data);
+        const merged = {
+          ...INITIAL_DB,
+          ...data,
+          restaurants: data.restaurants?.length ? data.restaurants : INITIAL_DB.restaurants,
+          users: data.users?.length ? data.users : INITIAL_DB.users,
+          orders: data.orders || [],
+          needs: data.needs || [],
+          menus: { ...INITIAL_DB.menus, ...data.menus },
+          inventory: { ...INITIAL_DB.inventory, ...data.inventory },
+          superAdmin: data.superAdmin || INITIAL_DB.superAdmin,
+        };
+        setDb(merged);
       } else {
         setDb(INITIAL_DB);
         saveToFirestore(INITIAL_DB);
