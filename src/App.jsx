@@ -197,8 +197,8 @@ export default function App() {
   const [syncing, setSyncing] = useState(false);
   const flashTimer = useRef(null);
   const saveTimer = useRef(null);
-  const isRemoteUpdate = useRef(false);
-  const lastSaved = useRef(null);
+  const localVersion = useRef(0);
+  const remoteVersion = useRef(0);
 
   // Load initial data from Firestore
   useEffect(() => {
@@ -206,32 +206,33 @@ export default function App() {
       if (data) {
         setDb(data);
       } else {
-        // First time — save initial data
         setDb(INITIAL_DB);
         saveToFirestore(INITIAL_DB);
       }
     });
   }, []);
 
-  // Subscribe to real-time Firestore updates
+  // Subscribe to real-time Firestore updates — ALWAYS apply remote changes
   useEffect(() => {
-    const unsub = subscribeToFirestore((remoteDb) => {
-      if (isRemoteUpdate.current) return; // skip if we just saved
+    const unsub = subscribeToFirestore((remoteDb, remoteTs) => {
+      // Only skip if we saved MORE recently than the remote update
+      if (remoteTs && remoteTs <= localVersion.current) return;
+      remoteVersion.current = remoteTs || 0;
       setDb(remoteDb);
     });
     return unsub;
   }, []);
 
-  // Debounced save to Firestore (300ms after last change)
+  // Debounced save to Firestore
   const scheduleSave = useCallback((data) => {
     clearTimeout(saveTimer.current);
     setSyncing(true);
+    const version = Date.now();
+    localVersion.current = version;
     saveTimer.current = setTimeout(async () => {
-      isRemoteUpdate.current = true;
-      await saveToFirestore(data);
-      setTimeout(() => { isRemoteUpdate.current = false; }, 1000);
+      await saveToFirestore(data, version);
       setSyncing(false);
-    }, 300);
+    }, 500);
   }, []);
 
   const mutate = useCallback((fn, flashData) => {
