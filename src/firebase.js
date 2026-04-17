@@ -26,10 +26,11 @@ export async function loadFromFirestore() {
   }
 }
 
-export async function saveToFirestore(data) {
+export async function saveToFirestore(data, version) {
   try {
     const ref = doc(db, "restau-pro", "state");
-    await setDoc(ref, { db: data, updatedAt: Date.now() });
+    const ts = version || Date.now();
+    await setDoc(ref, { db: data, updatedAt: ts, version: ts });
   } catch (e) {
     console.warn("Firestore save error:", e);
   }
@@ -39,7 +40,10 @@ export function subscribeToFirestore(callback) {
   try {
     const ref = doc(db, "restau-pro", "state");
     return onSnapshot(ref, (snap) => {
-      if (snap.exists()) callback(snap.data().db);
+      if (snap.exists()) {
+        const data = snap.data();
+        callback(data.db, data.version || 0);
+      }
     });
   } catch (e) {
     console.warn("Firestore subscribe error:", e);
