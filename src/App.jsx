@@ -752,6 +752,7 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
       {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="manager" mutate={mutate} userName={user.name} />}
       {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
       {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager db={db} />}
+      {tab==="res"    && <ReservationsPanel reservations={reservations||[]} rId={r.id} user={user} mutate={mutate} color={r.color} />}
     </Shell>
   );
 }
@@ -906,7 +907,7 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
       {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="chef" mutate={mutate} userName={user.name} />}
       {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
       {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager db={db} />}
-      {tab==="res"    && <ReservationsPanel reservations={reservations} rId={r.id} user={user} mutate={mutate} color={r.color} />}
+      {tab==="res"    && <ReservationsPanel reservations={reservations||[]} rId={r.id} user={user} mutate={mutate} color={r.color} />}
 
     </Shell>
   );
@@ -1107,7 +1108,7 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
 
 
 // ── RESERVATIONS PANEL ────────────────────────────────────────────────────────
-function ReservationsPanel({ reservations, rId, user, mutate, color }) {
+function ReservationsPanel({ reservations = [], rId, user, mutate, color }) {
   const [showAdd, setShowAdd] = useState(false);
   const [client, setClient] = useState("");
   const [phone, setPhone] = useState("");
@@ -1124,8 +1125,9 @@ function ReservationsPanel({ reservations, rId, user, mutate, color }) {
   };
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const upcoming = [...reservations].filter(r => new Date(r.date) >= today && !r.done).sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const past = [...reservations].filter(r => new Date(r.date) < today || r.done).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
+  const safeRes = Array.isArray(reservations) ? reservations : [];
+  const upcoming = [...safeRes].filter(r => new Date(r.date) >= today && !r.done).sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const past = [...safeRes].filter(r => new Date(r.date) < today || r.done).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
 
   return (
     <div>
