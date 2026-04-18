@@ -6,7 +6,7 @@ const INITIAL_DB = {
   restaurants: [
     { id: "r1", name: "Le Bistro Parisien", logo: "🥐", color: "#D4A017", address: "12 Rue de la Paix, Paris" },
     { id: "r2", name: "La Bella Italia", logo: "🍕", color: "#C0392B", address: "8 Via Roma, Lyon" },
-    { id: "r3", name: "Layali Al Cham Laeken", logo: "🌙", color: "#8B2500", address: "Rue Fransman 42, 1020 Laeken" }
+    { id: "r3", name: "Layali Al Cham Laeken", logo: "🌙", color: "#8B2500", address: "Rue Fransman 42, 1020 Laeken", logoImg: "LAYALI_LOGO" }
   ],
   users: [
     { id: "u1", rId: "r1", username: "gerant",  password: "1234", name: "Claire Moreau",  role: "manager", avatar: "📋" },
@@ -427,7 +427,7 @@ function Shell({ session, onLogout, tabs, activeTab, setTab, children, syncing }
   return (
     <div style={{ minHeight:"100vh",background:"#080808",fontFamily:"Georgia,serif",color:"#fff" }}>
       <header style={{ background:`linear-gradient(135deg,#0d0d0d,${r.color}18)`,borderBottom:`2px solid ${r.color}33`,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50 }}>
-        <span style={{ fontSize:34 }}>{r.logo}</span>
+        {r.logoImg === "LAYALI_LOGO" ? <img src={LAYALI_LOGO} alt={r.name} style={{ width:42,height:42,borderRadius:8,objectFit:"cover" }} /> : <span style={{ fontSize:34 }}>{r.logo}</span>}
         <div style={{ flex:1 }}>
           <div style={{ fontWeight:800,fontSize:13,letterSpacing:1 }}>{r.name}</div>
           <div style={{ fontSize:11,color:`${r.color}bb` }}>{user.avatar} {user.name} · {rL[user.role]}</div>
@@ -1323,7 +1323,7 @@ function SuperAdmin({ db, mutate, onLogout, syncing }) {
             {showNr && <div style={{ background:"#111",borderRadius:12,padding:14,marginBottom:14,border:"1px solid #D4A01733" }}><div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10 }}><SI ph="Nom" val={nr.name} set={v=>setNr(p=>({...p,name:v}))} /><SI ph="Emoji logo" val={nr.logo} set={v=>setNr(p=>({...p,logo:v}))} /><SI ph="Adresse" val={nr.address} set={v=>setNr(p=>({...p,address:v}))} /><div style={{ display:"flex",gap:8,alignItems:"center" }}><input type="color" value={nr.color} onChange={e=>setNr(p=>({...p,color:e.target.value}))} style={{ width:44,height:40,border:"none",borderRadius:6,cursor:"pointer" }} /><span style={{ color:"#555",fontSize:12 }}>Couleur</span></div></div><BigBtn color="#D4A017" onClick={addRest}>✅ Créer</BigBtn></div>}
             {(db.restaurants||[]).map(r=>(
               <div key={r.id} style={{ background:"#0f0f0f",borderRadius:14,padding:14,marginBottom:10,border:`1px solid ${r.color}33`,display:"flex",alignItems:"center",gap:14 }}>
-                <span style={{ fontSize:40 }}>{r.logo}</span>
+                {r.logoImg === "LAYALI_LOGO" ? <img src={LAYALI_LOGO} alt={r.name} style={{ width:48,height:48,borderRadius:8,objectFit:"cover" }} /> : <span style={{ fontSize:40 }}>{r.logo}</span>}
                 <div style={{ flex:1 }}><div style={{ fontWeight:800,fontSize:15 }}>{r.name}</div><div style={{ color:"#555",fontSize:12 }}>{r.address}</div><div style={{ fontSize:11,color:"#444",marginTop:3 }}>👥 {(db.users||[]).filter(u=>u.rId===r.id).length} · 🍽️ {(db.menus?.[r.id]||[]).length} plats</div></div>
                 <button onClick={()=>mutate(d=>{d.restaurants=d.restaurants.filter(x=>x.id!==r.id);d.users=d.users.filter(u=>u.rId!==r.id);delete d.menus[r.id];delete d.inventory[r.id];return d;})} style={{ background:"#1a0808",border:"1px solid #ef4444",borderRadius:8,padding:"7px 11px",color:"#ef4444",cursor:"pointer" }}>🗑️</button>
               </div>
