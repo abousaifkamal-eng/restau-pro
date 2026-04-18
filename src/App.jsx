@@ -694,14 +694,42 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
 
 // ── CHEF APP ──────────────────────────────────────────────────────────────────
 function ChefApp({ db, mutate, session, onLogout, syncing }) {
-  const [tab, setTab] = useState("orders");
+  const [tab, setTab] = useState("call");
+  const [calling, setCalling] = useState(false);
+  const [step, setStep] = useState("info");
+  const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [orderType, setOrderType] = useState("phone");
+  const [cart, setCart] = useState([]);
+  const [catFilter, setCatFilter] = useState("Tous");
+  const [pickupAt, setPickupAt] = useState(defaultPickup);
   const { restaurant:r, user } = session;
-  const orders = (db.orders||[]).filter(o => o.rId===r.id && ["pending","preparing","ready"].includes(o.status));
+  const orders = (db.orders||[]).filter(o => o.rId===r.id && ["pending","preparing","ready","scheduled"].includes(o.status));
   const needs  = (db.needs||[]).filter(n => n.rId===r.id);
-  const inv    = db.inventory?.[r.id] || [];
   const menu   = db.menus?.[r.id] || [];
   const scheduled = orders.filter(o => o.status==="scheduled");
   const reservations = (db.reservations||[]).filter(rv => rv.rId===r.id);
+
+  const addToCart = (item) => setCart(p => { const ex = p.find(x => x.mid===item.id); return ex ? p.map(x=>x.mid===item.id?{...x,qty:x.qty+1}:x) : [...p,{mid:item.id,name:item.name,price:item.price,qty:1,emoji:item.emoji}]; });
+  const handleVoiceChef = useCallback((text) => {
+    const lower = text.toLowerCase();
+    menu.forEach(item => { if (lower.includes(item.name.toLowerCase())) addToCart(item); });
+    const nm = text.match(/(?:pour|client|monsieur|madame)\s+([A-Za-zÀ-ɏ]+(?:\s+[A-Za-zÀ-ɏ]+)?)/i);
+    if (nm) setClientName(nm[1].charAt(0).toUpperCase() + nm[1].slice(1));
+  }, [menu]);
+  const voiceChef = useVoice(handleVoiceChef);
+  const resetChefForm = () => { setCart([]); setClientName(""); setClientPhone(""); setCalling(false); setStep("info"); setPickupAt(defaultPickup()); };
+  const submitChefOrder = () => {
+    if (!clientName || !cart.length || !pickupAt) return;
+    const mins = minsUntil(pickupAt);
+    const status = mins > 30 ? "scheduled" : "pending";
+    const prepMin = Math.min(Math.max(...cart.map(c=>(menu.find(m=>m.id===c.mid)?.prep||15))),45);
+    const order = { id:uid(), rId:r.id, client:clientName, phone:clientPhone, type:orderType, items:cart, total:cart.reduce((s,c)=>s+c.price*c.qty,0), prepMin, status, pickupAt, createdAt:ts(), by:user.name };
+    mutate(d=>{ d.orders.push(order); return d; }, { type:"order", data:order });
+    resetChefForm(); setTab("orders");
+  };
+  const cats = ["Tous", ...new Set(menu.map(m=>m.cat))];
+  const menuItems = catFilter==="Tous" ? menu : menu.filter(m=>m.cat===catFilter);
 
   const tabs = [
     { id:"call",   icon:"📞", label:"Appel",        badge:0 },
