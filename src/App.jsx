@@ -152,7 +152,7 @@ const INITIAL_DB = {
       { id:"r3m44", name:"Latte",                   cat:"Boissons",  price:2.8,  prep:3,  emoji:"☕", img:"https://images.unsplash.com/photo-1541167760496-1628856ab772?w=200&h=200&fit=crop&q=80" },
       { id:"r3m45", name:"Café",                    cat:"Boissons",  price:2.0,  prep:2,  emoji:"☕", img:"https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=200&h=200&fit=crop&q=80" },
       { id:"r3m46", name:"Aich Saraya",             cat:"Boissons",  price:2.0,  prep:3,  emoji:"🍮", img:"https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=200&h=200&fit=crop&q=80" },
-      { id:"r3m47", name:"Boisson froide",          cat:"Boissons",  price:2.0,  prep:1,  emoji:"🥤", img:"https://images.unsplash.com/photo-1543253687-c931c8e01820?w=200&h=200&fit=crop&q=80" },
+      { id:"r3m47", name:"Boisson froide",          cat:"Boissons",  price:2.0,  prep:1,  emoji:"🥤", img:"https://images.unsplash.com/photo-1581006852262-e4307cf6283a?w=200&h=200&fit=crop&q=80" },
     ]
   },
   orders: [],
