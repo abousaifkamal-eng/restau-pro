@@ -112,7 +112,7 @@ const SC = {
   served:    { label: "Servie",     color: "#a78bfa", bg: "#100018", icon: "🍽️", next: "paid"      },
   paid:      { label: "Payée",      color: "#6b7280", bg: "#111",    icon: "💰", next: null         },
 };
-const ROLE_ADV = { chef: ["preparing","ready"], cashier: ["preparing","ready","served","paid"], waiter: ["served"], manager: ["preparing","ready","served","paid","pending"] };
+const ROLE_ADV = { chef: ["pending","preparing","ready","served","paid"], manager: ["pending","preparing","ready","served","paid"], cashier: ["paid"], waiter: ["served"] };r: ["served"], manager: ["pending","preparing","ready","served","paid"] };
 
 // ── VOICE HOOK ────────────────────────────────────────────────────────────────
 function useVoice(onResult) {
@@ -699,16 +699,120 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
   const orders = (db.orders||[]).filter(o => o.rId===r.id && ["pending","preparing","ready"].includes(o.status));
   const needs  = (db.needs||[]).filter(n => n.rId===r.id);
   const inv    = db.inventory?.[r.id] || [];
+  const menu   = db.menus?.[r.id] || [];
+  const scheduled = orders.filter(o => o.status==="scheduled");
+  const reservations = (db.reservations||[]).filter(rv => rv.rId===r.id);
+
   const tabs = [
-    { id:"orders", icon:"🔥", label:"Cuisine",  badge:orders.filter(o=>o.status==="pending").length },
-    { id:"needs",  icon:"🛒", label:"Besoins",  badge:needs.filter(n=>!n.done).length },
-    { id:"stock",  icon:"📦", label:"Stock",    badge:inv.filter(i=>i.qty<=i.min).length },
+    { id:"call",   icon:"📞", label:"Appel",        badge:0 },
+    { id:"orders", icon:"📋", label:"Commandes",    badge:orders.filter(o=>!["paid","scheduled"].includes(o.status)).length },
+    { id:"sched",  icon:"🕐", label:"Programmées",  badge:scheduled.length },
+    { id:"needs",  icon:"🛒", label:"Besoins",      badge:needs.filter(n=>!n.done).length },
+    { id:"res",    icon:"🪑", label:"Réserv.",       badge:reservations.filter(rv=>!rv.done&&new Date(rv.date)>=new Date()).length },
   ];
-  return (
+    return (
     <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
-      {tab==="orders" && (orders.length===0 ? <Empty icon="😴" text="Aucune commande en cours" /> : orders.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(o => <OrderCard key={o.id} order={o} color={r.color} userRole="chef" mutate={mutate} userName={user.name} />))}
-      {tab==="needs" && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager={false} />}
-      {tab==="stock" && <StockPanel inventory={inv} color={r.color} />}
+
+      {tab==="call" && !calling && (
+        <div style={{ textAlign:"center",paddingTop:36 }}>
+          <div style={{ color:"#333",fontSize:10,letterSpacing:3,marginBottom:36 }}>CUISINIER - PRISE DE COMMANDE</div>
+          <div style={{ position:"relative",display:"inline-block",marginBottom:44 }}>
+            <div style={{ position:"absolute",inset:-18,borderRadius:"50%",background:"#16a34a0e",animation:"ring1 2s ease-out infinite" }} />
+            <button onClick={()=>setCalling(true)} style={{ position:"relative",width:160,height:160,borderRadius:"50%",border:"none",background:"linear-gradient(145deg,#16a34a,#15803d)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 0 50px #16a34a33" }}>
+              <span style={{ fontSize:58 }}>📞</span>
+              <span style={{ color:"#fff",fontWeight:900,fontSize:12,letterSpacing:3 }}>APPEL</span>
+              <span style={{ color:"rgba(255,255,255,.5)",fontSize:10 }}>ENTRANT</span>
+            </button>
+          </div>
+          <style>{`@keyframes ring1{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.7);opacity:0}}`}</style>
+        </div>
+      )}
+      {tab==="call" && calling && (
+        <div>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+            <span style={{ color:"#16a34a",fontWeight:900,fontSize:12,letterSpacing:2 }}>APPEL EN COURS</span>
+            <button onClick={resetChefForm} style={{ background:"#1a0808",border:"1px solid #ef4444",borderRadius:8,padding:"6px 12px",color:"#ef4444",cursor:"pointer",fontSize:12 }}>Raccrocher</button>
+          </div>
+          <div style={{ display:"flex",gap:4,marginBottom:16 }}>
+            {[["info","1.Client"],["items","2.Articles"],["time","3.Heure"],["confirm","4.Confirmer"]].map(([id,lb])=>(
+              <button key={id} onClick={()=>setStep(id)} style={{ flex:1,padding:"8px 2px",borderRadius:8,border:"none",background:step===id?r.color:"#141414",color:step===id?"#060606":"#444",cursor:"pointer",fontWeight:800,fontSize:10 }}>{lb}</button>
+            ))}
+          </div>
+          {step==="info" && (
+            <Pane color={r.color} title="CLIENT">
+              <FInp label="NOM DU CLIENT *" val={clientName} set={setClientName} icon="👤" />
+              <FInp label="TELEPHONE" val={clientPhone} set={setClientPhone} icon="📱" />
+              <div style={{ display:"flex",gap:6,marginBottom:14 }}>
+                {[["phone","Tel"],["dine-in","Place"],["takeaway","Emporter"]].map(([v,lb])=>(
+                  <button key={v} onClick={()=>setOrderType(v)} style={{ flex:1,padding:"9px 4px",borderRadius:8,border:`2px solid ${orderType===v?r.color:"#1e1e1e"}`,background:orderType===v?`${r.color}22`:"transparent",color:orderType===v?r.color:"#444",cursor:"pointer",fontWeight:700,fontSize:11 }}>{lb}</button>
+                ))}
+              </div>
+              <BigBtn color={r.color} onClick={()=>setStep("items")} disabled={!clientName}>Articles</BigBtn>
+            </Pane>
+          )}
+          {step==="items" && (
+            <div>
+              <Pane color={r.color} title="MENU">
+                <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:12 }}>
+                  {cats.map(c=><button key={c} onClick={()=>setCatFilter(c)} style={{ padding:"5px 11px",borderRadius:20,border:`1px solid ${catFilter===c?r.color:"#1e1e1e"}`,background:catFilter===c?r.color:"transparent",color:catFilter===c?"#060606":"#555",cursor:"pointer",fontSize:11,fontWeight:700 }}>{c}</button>)}
+                </div>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8 }}>
+                  {menuItems.map(item=>(
+                    <button key={item.id} onClick={()=>addToCart(item)} style={{ background:"#111",border:"1px solid #1a1a1a",borderRadius:10,padding:9,cursor:"pointer",textAlign:"center",color:"#fff" }}
+                      onMouseOver={e=>{e.currentTarget.style.borderColor=r.color;}} onMouseOut={e=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
+                      <div style={{ fontSize:24 }}>{item.emoji}</div>
+                      <div style={{ fontSize:10,fontWeight:700,margin:"3px 0" }}>{item.name}</div>
+                      <div style={{ color:r.color,fontSize:11,fontWeight:800 }}>{item.price.toFixed(2)}€</div>
+                    </button>
+                  ))}
+                </div>
+              </Pane>
+              {cart.length > 0 && (
+                <Pane color={r.color} title={`PANIER (${cart.length})`}>
+                  {cart.map(c=>(
+                    <div key={c.mid} style={{ display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #141414" }}>
+                      <span style={{ fontSize:20 }}>{c.emoji}</span><span style={{ flex:1,fontSize:13 }}>{c.name}</span>
+                      <QB onClick={()=>setCart(p=>{const e=p.find(x=>x.mid===c.mid);return e.qty>1?p.map(x=>x.mid===c.mid?{...x,qty:x.qty-1}:x):p.filter(x=>x.mid!==c.mid)})}>-</QB>
+                      <span style={{ width:22,textAlign:"center",fontWeight:800 }}>{c.qty}</span>
+                      <QB onClick={()=>setCart(p=>p.map(x=>x.mid===c.mid?{...x,qty:x.qty+1}:x))}>+</QB>
+                      <span style={{ color:r.color,fontWeight:700,width:50,textAlign:"right",fontSize:13 }}>{(c.price*c.qty).toFixed(2)}€</span>
+                    </div>
+                  ))}
+                  <BigBtn color={r.color} onClick={()=>setStep("time")} style={{ marginTop:12 }}>Heure</BigBtn>
+                </Pane>
+              )}
+            </div>
+          )}
+          {step==="time" && (
+            <Pane color="#8b5cf6" title="HEURE DE RETRAIT">
+              <PickupPicker value={pickupAt} onChange={setPickupAt} color="#8b5cf6" />
+              <BigBtn color="#8b5cf6" onClick={()=>setStep("confirm")} disabled={!pickupAt||minsUntil(pickupAt)<0}>Confirmer</BigBtn>
+            </Pane>
+          )}
+          {step==="confirm" && (
+            <Pane color="#16a34a" title="RECAPITULATIF">
+              <div style={{ background:"#0a140a",borderRadius:10,padding:14,marginBottom:14 }}>
+                <RR l="Client" v={clientName} c="#fff" bold />
+                <RR l="Type" v={{phone:"Tel","dine-in":"Sur place",takeaway:"Emporter"}[orderType]} c="#fff" />
+                <RR l="Prete pour" v={fmtDT(pickupAt)} c="#8b5cf6" bold />
+                <div style={{ borderTop:"1px solid #1a2e1a",margin:"10px 0" }} />
+                {cart.map(c=><RR key={c.mid} l={`${c.emoji} ${c.name} x${c.qty}`} v={`${(c.price*c.qty).toFixed(2)}€`} c={r.color} />)}
+                <div style={{ borderTop:"1px solid #1a2e1a",margin:"10px 0" }} />
+                <RR l="TOTAL" v={`${cart.reduce((s,c)=>s+c.price*c.qty,0).toFixed(2)}€`} c="#16a34a" bold />
+              </div>
+              <button onClick={submitChefOrder} style={{ width:"100%",background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:14,padding:16,fontSize:15,fontWeight:900,color:"#fff",cursor:"pointer",letterSpacing:2 }}>
+                VALIDER LA COMMANDE
+              </button>
+            </Pane>
+          )}
+        </div>
+      )}
+
+      {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="chef" mutate={mutate} userName={user.name} />}
+      {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
+      {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager />}
+      {tab==="res"    && <ReservationsPanel reservations={reservations} rId={r.id} user={user} mutate={mutate} color={r.color} />}
+
     </Shell>
   );
 }
@@ -725,47 +829,10 @@ function CashierApp({ db, mutate, session, onLogout, syncing }) {
   const todayCA = paidToday.reduce((s,o)=>s+o.total,0);
   const upcomingRes = reservations.filter(rv => !rv.done && new Date(rv.date) >= new Date(new Date().setHours(0,0,0,0)));
 
-  // Same order form state as manager
-  const [calling, setCalling] = useState(false);
-  const [step, setStep] = useState("info");
-  const [clientName, setClientName] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
-  const [orderType, setOrderType] = useState("phone");
-  const [cart, setCart] = useState([]);
-  const [catFilter, setCatFilter] = useState("Tous");
-  const [pickupAt, setPickupAt] = useState(defaultPickup);
 
-  const addToCart = (item) => setCart(p => { const ex = p.find(x => x.mid === item.id); return ex ? p.map(x => x.mid===item.id?{...x,qty:x.qty+1}:x) : [...p,{mid:item.id,name:item.name,price:item.price,qty:1,emoji:item.emoji}]; });
-  const handleVoice = useCallback((text) => {
-    const lower = text.toLowerCase();
-    menu.forEach(item => { if (lower.includes(item.name.toLowerCase())) addToCart(item); });
-    const nm = text.match(/(?:pour|client|c'est|monsieur|madame|nom)\s+([A-ZÀ-Üa-zà-ü]+(?:\s+[A-ZÀ-Üa-zà-ü]+)?)/i);
-    if (nm) setClientName(nm[1].charAt(0).toUpperCase() + nm[1].slice(1));
-  }, [menu]);
-  const voice = useVoice(handleVoice);
-  const resetForm = () => { setCart([]); setClientName(""); setClientPhone(""); setCalling(false); setStep("info"); setPickupAt(defaultPickup()); };
-
-  const submitOrder = () => {
-    if (!clientName || !cart.length || !pickupAt) return;
-    const mins = minsUntil(pickupAt);
-    const status = mins > 30 ? "scheduled" : "pending";
-    const prepMin = Math.min(Math.max(...cart.map(c => (menu.find(m=>m.id===c.mid)?.prep||15))), 45);
-    const order = { id:uid(), rId:r.id, client:clientName, phone:clientPhone, type:orderType, items:cart, total:cart.reduce((s,c)=>s+c.price*c.qty,0), prepMin, status, pickupAt, createdAt:ts(), by:user.name };
-    mutate(d => { d.orders.push(order); return d; }, { type:"order", data:order });
-    resetForm(); setTab("cash");
-  };
-
-  const cats = ["Tous", ...new Set(menu.map(m=>m.cat))];
-  const menuItems = catFilter==="Tous" ? menu : menu.filter(m=>m.cat===catFilter);
-
-  const kitchenOrders = orders.filter(o => ["pending","preparing","ready"].includes(o.status));
 
   const tabs = [
-    { id:"cash",    icon:"💳", label:"Caisse",      badge: toEnc.length },
-    { id:"kitchen", icon:"🔥", label:"Cuisine",     badge: kitchenOrders.filter(o=>o.status==="pending").length },
-    { id:"call",    icon:"📞", label:"Appel",        badge: 0 },
-    { id:"res",     icon:"🪑", label:"Réserv.",      badge: upcomingRes.length },
-    { id:"needs",   icon:"🛒", label:"Besoins",      badge: needs.filter(n=>!n.done).length },
+    { id:"cash", icon:"💳", label:"Caisse", badge: toEnc.length },
   ];
 
   return (
@@ -788,135 +855,22 @@ function CashierApp({ db, mutate, session, onLogout, syncing }) {
         </div>
       )}
 
-      {/* ── CUISINE ── */}
-      {tab==="kitchen" && (
+      {/* ── CAISSE ── */}
+      {tab==="cash" && (
         <div>
-          <div style={{ background:"#0d0820",border:"1px solid #8b5cf633",borderRadius:12,padding:"12px 16px",marginBottom:14,fontSize:12,color:"#a78bfa" }}>
-            👨‍🍳 En tant que cuisinier-caissier, vous pouvez préparer et valider les commandes directement.
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
+            <StatCard icon="💰" label="CA Aujourd'hui" val={`${todayCA.toFixed(2)}€`} color={r.color} />
+            <StatCard icon="✅" label="Payées" val={paidToday.length} color="#10b981" />
+            <StatCard icon="⏳" label="À encaisser" val={toEnc.length} color="#f59e0b" />
           </div>
-          {kitchenOrders.length===0 ? <Empty icon="😴" text="Aucune commande en cuisine" /> :
-            kitchenOrders.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(o => (
-              <OrderCard key={o.id} order={o} color={r.color} userRole="cashier" mutate={mutate} userName={user.name} />
-            ))}
+          <Lbl>💳 À ENCAISSER ({toEnc.length})</Lbl>
+          {toEnc.length===0 ? <Empty icon="☕" text="Rien à encaisser" /> :
+            toEnc.map(o => <CashierOrderCard key={o.id} order={o} color={r.color} mutate={mutate} userName={user.name} rId={r.id} />)}
+          <Lbl style={{ marginTop:20 }}>📜 PAYÉES AUJOURD'HUI</Lbl>
+          {paidToday.length===0 ? <Empty icon="📋" text="Aucune" /> :
+            paidToday.map(o => <OrderCard key={o.id} order={o} color="#10b981" userRole="cashier" mutate={mutate} userName={user.name} readonly />)}
         </div>
       )}
-
-      {/* ── APPEL (identique gérant) ── */}
-      {tab==="call" && !calling && (
-        <div style={{ textAlign:"center",paddingTop:36 }}>
-          <div style={{ color:"#333",fontSize:10,letterSpacing:3,marginBottom:36 }}>CAISSIER · PRISE DE COMMANDE</div>
-          <div style={{ position:"relative",display:"inline-block",marginBottom:44 }}>
-            <div style={{ position:"absolute",inset:-18,borderRadius:"50%",background:"#16a34a0e",animation:"ring1 2s ease-out infinite" }} />
-            <button onClick={()=>setCalling(true)} style={{ position:"relative",width:160,height:160,borderRadius:"50%",border:"none",background:"linear-gradient(145deg,#16a34a,#15803d)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 0 50px #16a34a33" }}>
-              <span style={{ fontSize:58 }}>📞</span>
-              <span style={{ color:"#fff",fontWeight:900,fontSize:12,letterSpacing:3 }}>NOUVELLE</span>
-              <span style={{ color:"rgba(255,255,255,.5)",fontSize:10 }}>COMMANDE</span>
-            </button>
-          </div>
-          <style>{`@keyframes ring1{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.7);opacity:0}}`}</style>
-        </div>
-      )}
-      {tab==="call" && calling && (
-        <div>
-          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
-            <span style={{ color:"#16a34a",fontWeight:900,fontSize:12,letterSpacing:2 }}>📞 NOUVELLE COMMANDE</span>
-            <button onClick={resetForm} style={{ background:"#1a0808",border:"1px solid #ef4444",borderRadius:8,padding:"6px 12px",color:"#ef4444",cursor:"pointer",fontSize:12 }}>✕ Annuler</button>
-          </div>
-          <div style={{ display:"flex",gap:4,marginBottom:16 }}>
-            {[["info","1·Client"],["items","2·Articles"],["time","3·Heure"],["confirm","4·Confirmer"]].map(([id,lb]) => (
-              <button key={id} onClick={()=>setStep(id)} style={{ flex:1,padding:"8px 2px",borderRadius:8,border:"none",background:step===id?r.color:"#141414",color:step===id?"#060606":"#444",cursor:"pointer",fontWeight:800,fontSize:10 }}>{lb}</button>
-            ))}
-          </div>
-          {step==="info" && (
-            <Pane color={r.color} title="👤 CLIENT">
-              <FInp label="NOM DU CLIENT *" val={clientName} set={setClientName} icon="👤" />
-              <FInp label="TÉLÉPHONE" val={clientPhone} set={setClientPhone} icon="📱" />
-              <div style={{ display:"flex",gap:6,marginBottom:14 }}>
-                {[["phone","📞 Tél"],["dine-in","🪑 Place"],["takeaway","🥡 Emporter"]].map(([v,lb]) => (
-                  <button key={v} onClick={()=>setOrderType(v)} style={{ flex:1,padding:"9px 4px",borderRadius:8,border:`2px solid ${orderType===v?r.color:"#1e1e1e"}`,background:orderType===v?`${r.color}22`:"transparent",color:orderType===v?r.color:"#444",cursor:"pointer",fontWeight:700,fontSize:11 }}>{lb}</button>
-                ))}
-              </div>
-              <BigBtn color={r.color} onClick={()=>setStep("items")} disabled={!clientName}>Articles →</BigBtn>
-            </Pane>
-          )}
-          {step==="items" && (
-            <div>
-              <Pane color="#16a34a" title="🎤 DICTER LA COMMANDE">
-                <div style={{ textAlign:"center" }}>
-                  {voice.supported ? (
-                    <>
-                      <button onClick={voice.active?voice.stop:voice.start} style={{ width:70,height:70,borderRadius:"50%",border:`3px solid ${voice.active?"#ef4444":"#16a34a"}`,background:voice.active?"#ef444412":"#16a34a12",cursor:"pointer",fontSize:28,outline:"none" }}>
-                        {voice.active?"⏹":"🎤"}
-                      </button>
-                      <p style={{ color:voice.active?"#ef4444":"#555",fontSize:12,marginTop:8 }}>{voice.active?"🔴 En écoute...":'Ex: "shawarma pour Aziz"'}</p>
-                      {voice.transcript && <div style={{ background:"#080f08",border:"1px solid #16a34a33",borderRadius:8,padding:10,color:"#86efac",fontSize:13,fontStyle:"italic" }}>"{voice.transcript}"</div>}
-                    </>
-                  ) : <div style={{ color:"#f59e0b",fontSize:12,background:"#1a1500",borderRadius:8,padding:10 }}>⚠️ Micro disponible sur Chrome</div>}
-                </div>
-              </Pane>
-              <Pane color={r.color} title="🍽️ MENU">
-                <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:12 }}>
-                  {cats.map(c => <button key={c} onClick={()=>setCatFilter(c)} style={{ padding:"5px 11px",borderRadius:20,border:`1px solid ${catFilter===c?r.color:"#1e1e1e"}`,background:catFilter===c?r.color:"transparent",color:catFilter===c?"#060606":"#555",cursor:"pointer",fontSize:11,fontWeight:700 }}>{c}</button>)}
-                </div>
-                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8 }}>
-                  {menuItems.map(item => (
-                    <button key={item.id} onClick={()=>addToCart(item)} style={{ background:"#111",border:"1px solid #1a1a1a",borderRadius:10,padding:9,cursor:"pointer",textAlign:"center",color:"#fff" }}
-                      onMouseOver={e=>{e.currentTarget.style.borderColor=r.color;}} onMouseOut={e=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
-                      <div style={{ fontSize:24 }}>{item.emoji}</div>
-                      <div style={{ fontSize:10,fontWeight:700,margin:"3px 0" }}>{item.name}</div>
-                      <div style={{ color:r.color,fontSize:11,fontWeight:800 }}>{item.price.toFixed(2)}€</div>
-                    </button>
-                  ))}
-                </div>
-              </Pane>
-              {cart.length > 0 && (
-                <Pane color={r.color} title={`🛒 PANIER (${cart.length})`}>
-                  {cart.map(c => (
-                    <div key={c.mid} style={{ display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid #141414" }}>
-                      <span style={{ fontSize:20 }}>{c.emoji}</span><span style={{ flex:1,fontSize:13 }}>{c.name}</span>
-                      <QB onClick={()=>setCart(p=>{const e=p.find(x=>x.mid===c.mid);return e.qty>1?p.map(x=>x.mid===c.mid?{...x,qty:x.qty-1}:x):p.filter(x=>x.mid!==c.mid)})}>−</QB>
-                      <span style={{ width:22,textAlign:"center",fontWeight:800 }}>{c.qty}</span>
-                      <QB onClick={()=>setCart(p=>p.map(x=>x.mid===c.mid?{...x,qty:x.qty+1}:x))}>+</QB>
-                      <span style={{ color:r.color,fontWeight:700,width:50,textAlign:"right",fontSize:13 }}>{(c.price*c.qty).toFixed(2)}€</span>
-                    </div>
-                  ))}
-                  <BigBtn color={r.color} onClick={()=>setStep("time")} style={{ marginTop:12 }}>Heure →</BigBtn>
-                </Pane>
-              )}
-            </div>
-          )}
-          {step==="time" && (
-            <Pane color="#8b5cf6" title="🕐 HEURE DE RETRAIT">
-              <PickupPicker value={pickupAt} onChange={setPickupAt} color="#8b5cf6" />
-              <BigBtn color="#8b5cf6" onClick={()=>setStep("confirm")} disabled={!pickupAt||minsUntil(pickupAt)<0}>Confirmer →</BigBtn>
-            </Pane>
-          )}
-          {step==="confirm" && (
-            <Pane color="#16a34a" title="✅ RÉCAPITULATIF">
-              <div style={{ background:"#0a140a",borderRadius:10,padding:14,marginBottom:14 }}>
-                <RR l="Client" v={clientName} c="#fff" bold />
-                <RR l="Type" v={{phone:"📞 Téléphone","dine-in":"🪑 Sur place",takeaway:"🥡 Emporter"}[orderType]} c="#fff" />
-                <RR l="Prête pour" v={fmtDT(pickupAt)} c="#8b5cf6" bold />
-                <div style={{ borderTop:"1px solid #1a2e1a",margin:"10px 0" }} />
-                {cart.map(c=><RR key={c.mid} l={`${c.emoji} ${c.name} ×${c.qty}`} v={`${(c.price*c.qty).toFixed(2)}€`} c={r.color} />)}
-                <div style={{ borderTop:"1px solid #1a2e1a",margin:"10px 0" }} />
-                <RR l="TOTAL" v={`${cart.reduce((s,c)=>s+c.price*c.qty,0).toFixed(2)}€`} c="#16a34a" bold />
-              </div>
-              <button onClick={submitOrder} style={{ width:"100%",background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:14,padding:16,fontSize:15,fontWeight:900,color:"#fff",cursor:"pointer",letterSpacing:2 }}>
-                📡 VALIDER LA COMMANDE
-              </button>
-            </Pane>
-          )}
-        </div>
-      )}
-
-      {/* ── RÉSERVATIONS ── */}
-      {tab==="res" && (
-        <ReservationsPanel reservations={reservations} rId={r.id} user={user} mutate={mutate} color={r.color} />
-      )}
-
-      {/* ── BESOINS ── */}
-      {tab==="needs" && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager={false} />}
     </Shell>
   );
 }
