@@ -112,7 +112,7 @@ const SC = {
   served:    { label: "Servie",     color: "#a78bfa", bg: "#100018", icon: "🍽️", next: "paid"      },
   paid:      { label: "Payée",      color: "#6b7280", bg: "#111",    icon: "💰", next: null         },
 };
-const ROLE_ADV = { chef: ["pending","preparing","ready","served","paid"], manager: ["pending","preparing","ready","served","paid"], cashier: ["paid"], waiter: ["served"] };r: ["served"], manager: ["pending","preparing","ready","served","paid"] };
+const ROLE_ADV = { chef: ["pending","preparing","ready","served","paid"], manager: ["pending","preparing","ready","served","paid"], cashier: ["paid"], waiter: ["served"] };
 
 // ── VOICE HOOK ────────────────────────────────────────────────────────────────
 function useVoice(onResult) {
