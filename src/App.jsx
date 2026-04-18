@@ -6,7 +6,7 @@ const INITIAL_DB = {
   restaurants: [
     { id: "r1", name: "Le Bistro Parisien", logo: "🥐", color: "#D4A017", address: "12 Rue de la Paix, Paris" },
     { id: "r2", name: "La Bella Italia", logo: "🍕", color: "#C0392B", address: "8 Via Roma, Lyon" },
-    { id: "r3", name: "Layali Al Cham Laeken", logo: "🌙", color: "#8B2500", address: "Rue Fransman 42, 1020 Laeken" }
+    { id: "r3", name: "Layali Al Cham Laeken", logo: "🌙", color: "#8B2500", address: "Rue Fransman 42, 1020 Laeken", logoUrl: "https://i.imgur.com/gIBT9dV.png" }
   ],
   users: [
     { id: "u1", rId: "r1", username: "gerant",  password: "1234", name: "Claire Moreau",  role: "manager", avatar: "📋" },
@@ -427,7 +427,7 @@ function Shell({ session, onLogout, tabs, activeTab, setTab, children, syncing }
   return (
     <div style={{ minHeight:"100vh",background:"#080808",fontFamily:"Georgia,serif",color:"#fff" }}>
       <header style={{ background:`linear-gradient(135deg,#0d0d0d,${r.color}18)`,borderBottom:`2px solid ${r.color}33`,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:50 }}>
-        <span style={{ fontSize:34 }}>{r.logo}</span>
+        {r.logoUrl ? <img src={r.logoUrl} alt={r.name} style={{ width:40,height:40,borderRadius:8,objectFit:"cover" }} /> : <span style={{ fontSize:34 }}>{r.logo}</span>}
         <div style={{ flex:1 }}>
           <div style={{ fontWeight:800,fontSize:13,letterSpacing:1 }}>{r.name}</div>
           <div style={{ fontSize:11,color:`${r.color}bb` }}>{user.avatar} {user.name} · {rL[user.role]}</div>
