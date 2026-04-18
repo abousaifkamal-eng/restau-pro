@@ -146,6 +146,7 @@ const INITIAL_DB = {
   },
   orders: [],
   needs: [],
+  shoppingLists: [], // historique des listes validées
   reservations: [],
   inventory: {
     r1: [
@@ -750,7 +751,7 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
       )}
       {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="manager" mutate={mutate} userName={user.name} />}
       {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
-      {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager />}
+      {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager db={db} />}
     </Shell>
   );
 }
@@ -904,7 +905,7 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
 
       {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="chef" mutate={mutate} userName={user.name} />}
       {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
-      {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager />}
+      {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager db={db} />}
       {tab==="res"    && <ReservationsPanel reservations={reservations} rId={r.id} user={user} mutate={mutate} color={r.color} />}
 
     </Shell>
@@ -1331,14 +1332,19 @@ function OrdersPanel({ orders, color, userRole, mutate, userName }) {
   );
 }
 
-function NeedsPanel({ needs, rId, user, mutate, color, isManager }) {
+function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
   const [activecat, setActiveCat] = useState(null);
   const [manualText, setManualText] = useState("");
   const [qty, setQty] = useState("1");
+  const [view, setView] = useState("current"); // current | history
+  const [showHistoryList, setShowHistoryList] = useState(null);
+
+  const shoppingLists = (db?.shoppingLists||[]).filter(l => l.rId === rId)
+    .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   const addNeed = useCallback((text, category) => {
     if (!text?.trim()) return;
-    const need = { id:uid(), rId, text:text.trim(), category:category||"Autre", by:user.name, avatar:user.avatar, createdAt:ts(), done:false };
+    const need = { id:uid(), rId, text:text.trim(), category:category||"Autre", by:user.name, avatar:user.avatar, createdAt:ts(), done:false, received:false };
     mutate(d=>{ d.needs.push(need); return d; }, { type:"need", data:need });
     setManualText(""); setQty("1");
   }, [rId, user, mutate]);
@@ -1348,108 +1354,233 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager }) {
     addNeed(text, cat);
   };
 
+  // Mark item as received (checkbox)
+  const toggleReceived = (id) => {
+    mutate(d=>{ const x=d.needs.find(i=>i.id===id); if(x) x.received=!x.received; return d; });
+  };
+
+  // Validate entire list → save to history + clear
+  const validateList = () => {
+    const pending = needs.filter(n=>!n.done && n.rId===rId);
+    if (pending.length === 0) return;
+    const listNum = shoppingLists.length + 1;
+    const list = {
+      id: uid(), rId,
+      num: listNum,
+      items: pending.map(n => ({...n, received: n.received||false})),
+      createdAt: ts(),
+      by: user.name,
+      total: pending.length,
+      received: pending.filter(n=>n.received).length
+    };
+    mutate(d=>{
+      d.shoppingLists = [...(d.shoppingLists||[]), list];
+      d.needs = d.needs.filter(n => n.rId !== rId || n.done);
+      return d;
+    });
+  };
+
+  // Reuse a historical list
+  const reuseList = (list) => {
+    list.items.forEach(item => {
+      const need = { id:uid(), rId, text:item.text, category:item.category||"Autre", by:user.name, avatar:user.avatar, createdAt:ts(), done:false, received:false };
+      mutate(d=>{ d.needs.push(need); return d; });
+    });
+    setShowHistoryList(null);
+    setView("current");
+  };
+
   const pending = needs.filter(n=>!n.done);
   const done = needs.filter(n=>n.done);
   const cats = Object.keys(NEEDS_CATALOG);
+  const receivedCount = pending.filter(n=>n.received).length;
 
   return (
     <div>
-      {/* Category selector */}
-      <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
-        {cats.map(cat => {
-          const c = NEEDS_CATALOG[cat];
-          return (
-            <button key={cat} onClick={()=>setActiveCat(activecat===cat?null:cat)}
-              style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 14px",borderRadius:12,border:`2px solid ${activecat===cat?c.color:"#2a2a2a"}`,background:activecat===cat?`${c.color}22`:"#111",cursor:"pointer",minWidth:70,transition:"all .2s" }}>
-              <span style={{ fontSize:26 }}>{c.emoji}</span>
-              <span style={{ color:activecat===cat?c.color:"#888",fontSize:11,fontWeight:700 }}>{cat}</span>
-            </button>
-          );
-        })}
+      {/* View toggle */}
+      <div style={{ display:"flex",gap:8,marginBottom:16 }}>
+        <button onClick={()=>setView("current")}
+          style={{ flex:1,padding:"10px",borderRadius:10,border:`2px solid ${view==="current"?"#3b82f6":"#2a2a2a"}`,background:view==="current"?"#3b82f622":"transparent",color:view==="current"?"#3b82f6":"#666",cursor:"pointer",fontWeight:700,fontSize:12 }}>
+          🛒 Liste actuelle ({pending.length})
+        </button>
+        <button onClick={()=>setView("history")}
+          style={{ flex:1,padding:"10px",borderRadius:10,border:`2px solid ${view==="history"?"#f59e0b":"#2a2a2a"}`,background:view==="history"?"#f59e0b22":"transparent",color:view==="history"?"#f59e0b":"#666",cursor:"pointer",fontWeight:700,fontSize:12 }}>
+          📋 Historique ({shoppingLists.length})
+        </button>
       </div>
 
-      {/* Products grid for selected category */}
-      {activecat && (
-        <div style={{ background:"#0c0c0c",borderRadius:14,padding:14,marginBottom:16,border:`1px solid ${NEEDS_CATALOG[activecat].color}33` }}>
-          <div style={{ color:NEEDS_CATALOG[activecat].color,fontSize:10,letterSpacing:2,fontWeight:700,marginBottom:12 }}>
-            {NEEDS_CATALOG[activecat].emoji} {activecat.toUpperCase()} — CLIQUEZ POUR AJOUTER
+      {/* ── CURRENT LIST ── */}
+      {view === "current" && (
+        <div>
+          {/* Category selector */}
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
+            {cats.map(cat => {
+              const c = NEEDS_CATALOG[cat];
+              return (
+                <button key={cat} onClick={()=>setActiveCat(activecat===cat?null:cat)}
+                  style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 14px",borderRadius:12,border:`2px solid ${activecat===cat?c.color:"#2a2a2a"}`,background:activecat===cat?`${c.color}22`:"#111",cursor:"pointer",minWidth:70,transition:"all .2s" }}>
+                  <span style={{ fontSize:26 }}>{c.emoji}</span>
+                  <span style={{ color:activecat===cat?c.color:"#888",fontSize:11,fontWeight:700 }}>{cat}</span>
+                </button>
+              );
+            })}
           </div>
-          {/* Quantity selector */}
-          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
-            <span style={{ color:"#888",fontSize:12 }}>Quantité :</span>
-            <QB onClick={()=>setQty(q=>String(Math.max(1,parseInt(q)-1)))}>−</QB>
-            <input value={qty} onChange={e=>setQty(e.target.value)}
-              style={{ width:50,textAlign:"center",background:"#1a1a1a",border:"1px solid #333",borderRadius:6,padding:"6px",color:"#fff",fontSize:15,fontWeight:700,outline:"none" }} />
-            <QB onClick={()=>setQty(q=>String(parseInt(q)+1))}>+</QB>
-            <span style={{ color:"#555",fontSize:12 }}>kg / unités</span>
-          </div>
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:10 }}>
-            {NEEDS_CATALOG[activecat].products.map(product => (
-              <button key={product.name} onClick={()=>addProduct(product, activecat)}
-                style={{ background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:8,cursor:"pointer",textAlign:"center",transition:"all .15s",overflow:"hidden" }}
-                onMouseOver={e=>{e.currentTarget.style.borderColor=NEEDS_CATALOG[activecat].color;e.currentTarget.style.background=`${NEEDS_CATALOG[activecat].color}15`;}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="#1a1a1a";}}>
-                <img src={product.img} alt={product.name}
-                  style={{ width:"100%",height:64,objectFit:"cover",borderRadius:6,marginBottom:6,display:"block" }}
-                  onError={e=>{e.target.style.display="none";}} />
-                <div style={{ color:"#fff",fontSize:11,fontWeight:600 }}>{product.name}</div>
-              </button>
-            ))}
-          </div>
+
+          {/* Products grid */}
+          {activecat && (
+            <div style={{ background:"#0c0c0c",borderRadius:14,padding:14,marginBottom:16,border:`1px solid ${NEEDS_CATALOG[activecat].color}33` }}>
+              <div style={{ color:NEEDS_CATALOG[activecat].color,fontSize:10,letterSpacing:2,fontWeight:700,marginBottom:12 }}>
+                {NEEDS_CATALOG[activecat].emoji} {activecat.toUpperCase()} — CLIQUEZ POUR AJOUTER
+              </div>
+              <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
+                <span style={{ color:"#888",fontSize:12 }}>Qté :</span>
+                <QB onClick={()=>setQty(q=>String(Math.max(1,parseInt(q||1)-1)))}>−</QB>
+                <input value={qty} onChange={e=>setQty(e.target.value)}
+                  style={{ width:50,textAlign:"center",background:"#1a1a1a",border:"1px solid #333",borderRadius:6,padding:"6px",color:"#fff",fontSize:15,fontWeight:700,outline:"none" }} />
+                <QB onClick={()=>setQty(q=>String(parseInt(q||1)+1))}>+</QB>
+                <span style={{ color:"#555",fontSize:12 }}>kg / unités</span>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(88px,1fr))",gap:10 }}>
+                {NEEDS_CATALOG[activecat].products.map(product => (
+                  <button key={product.name} onClick={()=>addProduct(product, activecat)}
+                    style={{ background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:8,cursor:"pointer",textAlign:"center",transition:"all .15s",overflow:"hidden" }}
+                    onMouseOver={e=>{e.currentTarget.style.borderColor=NEEDS_CATALOG[activecat].color;e.currentTarget.style.background=`${NEEDS_CATALOG[activecat].color}15`;}}
+                    onMouseOut={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="#1a1a1a";}}>
+                    <img src={product.img} alt={product.name}
+                      style={{ width:"100%",height:62,objectFit:"cover",borderRadius:6,marginBottom:5,display:"block" }}
+                      onError={e=>{e.target.style.display="none";}} />
+                    <div style={{ color:"#fff",fontSize:10,fontWeight:600 }}>{product.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Manual/voice input */}
+          <Pane color="#3b82f6" title="✍️ SAISIE MANUELLE OU VOCALE">
+            <VoiceInput onSubmit={(t)=>addNeed(t, activecat||"Autre")} placeholder='Ex: "sauce tomate × 3"' buttonLabel="Ajouter" />
+          </Pane>
+
+          {/* Pending list with checkboxes */}
+          {pending.length > 0 && (
+            <div>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
+                <Lbl>À ACHETER ({pending.length}) — {receivedCount} reçus</Lbl>
+                {isManager && pending.length > 0 && (
+                  <button onClick={validateList}
+                    style={{ background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:8,padding:"8px 14px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:12 }}>
+                    ✅ Valider & archiver
+                  </button>
+                )}
+              </div>
+              {/* Progress bar */}
+              {receivedCount > 0 && (
+                <div style={{ background:"#1a1a1a",borderRadius:20,height:6,marginBottom:12,overflow:"hidden" }}>
+                  <div style={{ background:"#16a34a",height:"100%",width:`${(receivedCount/pending.length)*100}%`,transition:"width .3s",borderRadius:20 }} />
+                </div>
+              )}
+              {cats.concat(["Autre"]).map(cat => {
+                const catNeeds = pending.filter(n => (n.category||"Autre") === cat);
+                if (catNeeds.length === 0) return null;
+                const c = NEEDS_CATALOG[cat] || { emoji:"📦", color:"#888" };
+                return (
+                  <div key={cat} style={{ marginBottom:14 }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"6px 10px",background:`${c.color}11`,borderRadius:8 }}>
+                      <span style={{ fontSize:18 }}>{c.emoji}</span>
+                      <span style={{ color:c.color||"#888",fontSize:11,letterSpacing:2,fontWeight:700,flex:1 }}>{cat.toUpperCase()}</span>
+                      <span style={{ color:c.color,fontSize:11 }}>{catNeeds.filter(n=>n.received).length}/{catNeeds.length}</span>
+                    </div>
+                    {catNeeds.map(n=>(
+                      <div key={n.id} style={{ background:n.received?"#0a140a":"#0a0f1a",border:`1px solid ${n.received?"#16a34a44":"#1e3050"}`,borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,transition:"all .2s" }}>
+                        {/* Checkbox */}
+                        <button onClick={()=>toggleReceived(n.id)}
+                          style={{ width:28,height:28,borderRadius:6,border:`2px solid ${n.received?"#16a34a":c.color||"#3b82f6"}`,background:n.received?"#16a34a":"transparent",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all .2s" }}>
+                          {n.received ? "✓" : ""}
+                        </button>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:14,fontWeight:600,textDecoration:n.received?"line-through":"none",color:n.received?"#888":"#fff" }}>{n.text}</div>
+                          <div style={{ color:"#444",fontSize:11,marginTop:1 }}>{n.avatar} {n.by} · {fmt(n.createdAt)}</div>
+                        </div>
+                        {isManager && (
+                          <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})}
+                            style={{ background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:16 }}>🗑️</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {pending.length === 0 && <Empty icon="✅" text="Rien à acheter !" />}
         </div>
       )}
 
-      {/* Manual input */}
-      <Pane color="#3b82f6" title="✍️ SAISIE MANUELLE OU VOCALE">
-        <VoiceInput onSubmit={(t)=>addNeed(t, activecat||"Autre")} placeholder='Ex: "sauce tomate × 3"' buttonLabel="Ajouter" />
-      </Pane>
-
-      {/* Pending list grouped by category */}
-      <Lbl>EN ATTENTE ({pending.length})</Lbl>
-      {pending.length===0 ? <Empty icon="✅" text="Rien à acheter !" /> : (
+      {/* ── HISTORY VIEW ── */}
+      {view === "history" && (
         <div>
-          {cats.concat(["Autre"]).map(cat => {
-            const catNeeds = pending.filter(n => (n.category||"Autre") === cat);
-            if (catNeeds.length === 0) return null;
-            const c = NEEDS_CATALOG[cat] || { emoji:"📦", color:"#888" };
-            return (
-              <div key={cat} style={{ marginBottom:16 }}>
-                <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
-                  <span style={{ fontSize:18 }}>{c.emoji}</span>
-                  <span style={{ color:c.color||"#888",fontSize:11,letterSpacing:2,fontWeight:700 }}>{cat.toUpperCase()} ({catNeeds.length})</span>
+          {shoppingLists.length === 0 ? <Empty icon="📋" text="Aucun historique" /> :
+            showHistoryList ? (
+              <div>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+                  <span style={{ color:"#f59e0b",fontWeight:700 }}>📋 Liste #{showHistoryList.num}</span>
+                  <div style={{ display:"flex",gap:8 }}>
+                    <button onClick={()=>reuseList(showHistoryList)}
+                      style={{ background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:8,padding:"8px 14px",color:"#060606",cursor:"pointer",fontWeight:700,fontSize:12 }}>
+                      🔄 Réutiliser cette liste
+                    </button>
+                    <button onClick={()=>setShowHistoryList(null)}
+                      style={{ background:"#1a1a1a",border:"1px solid #333",borderRadius:8,padding:"8px 12px",color:"#888",cursor:"pointer",fontSize:12 }}>
+                      ← Retour
+                    </button>
+                  </div>
                 </div>
-                {catNeeds.map(n=>(
-                  <div key={n.id} style={{ background:"#0a0f1a",border:"1px solid #1e3050",borderRadius:12,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:12 }}>
-                    {isManager && <button onClick={()=>mutate(d=>{const x=d.needs.find(i=>i.id===n.id);if(x)x.done=true;return d;})} style={{ width:26,height:26,borderRadius:"50%",border:`2px solid ${c.color||"#3b82f6"}`,background:"transparent",cursor:"pointer",flexShrink:0,color:c.color||"#3b82f6",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center" }}>✓</button>}
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontSize:14,fontWeight:600 }}>{n.text}</div>
-                      <div style={{ color:"#444",fontSize:11,marginTop:2 }}>{n.avatar} {n.by} · {fmt(n.createdAt)}</div>
+                <div style={{ color:"#555",fontSize:12,marginBottom:12 }}>
+                  {fmtD(showHistoryList.createdAt)} · par {showHistoryList.by} · {showHistoryList.received}/{showHistoryList.total} reçus
+                </div>
+                {showHistoryList.items.map((item, i) => (
+                  <div key={i} style={{ background:"#0c0c0c",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,border:"1px solid #1e1e1e" }}>
+                    <div style={{ width:26,height:26,borderRadius:6,background:item.received?"#16a34a":"#1a1a1a",border:`2px solid ${item.received?"#16a34a":"#444"}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:13,color:"#fff" }}>
+                      {item.received?"✓":""}
                     </div>
-                    {isManager && <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})} style={{ background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:18 }}>🗑️</button>}
+                    <div style={{ flex:1 }}>
+                      <span style={{ fontSize:13,color:item.received?"#888":"#fff",textDecoration:item.received?"line-through":"none" }}>{item.text}</span>
+                      <span style={{ color:"#555",fontSize:11,marginLeft:8 }}>{item.category}</span>
+                    </div>
                   </div>
                 ))}
               </div>
-            );
-          })}
+            ) : (
+              shoppingLists.map((list, i) => (
+                <div key={list.id} onClick={()=>setShowHistoryList(list)}
+                  style={{ background:"#0c0c0c",borderRadius:12,padding:"14px 16px",marginBottom:10,border:"1px solid #1e1e1e",cursor:"pointer",transition:"all .2s" }}
+                  onMouseOver={e=>e.currentTarget.style.borderColor="#f59e0b"}
+                  onMouseOut={e=>e.currentTarget.style.borderColor="#1e1e1e"}>
+                  <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                      <div style={{ background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:8,padding:"4px 10px",color:"#f59e0b",fontWeight:900,fontSize:14 }}>
+                        #{list.num}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight:700,color:"#fff" }}>{list.total} articles</div>
+                        <div style={{ color:"#555",fontSize:12 }}>{fmtD(list.createdAt)} · {list.by}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ color:"#16a34a",fontSize:13,fontWeight:700 }}>{list.received}/{list.total} reçus</div>
+                      <div style={{ color:"#555",fontSize:11 }}>→ voir</div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )
+          }
         </div>
-      )}
-
-      {/* Done list */}
-      {done.length>0 && (
-        <>
-          <Lbl style={{ marginTop:16 }}>✅ ACHETÉ ({done.length})</Lbl>
-          {done.map(n=>(
-            <div key={n.id} style={{ background:"#0a120a",border:"1px solid #1a2e1a",borderRadius:12,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:12,opacity:.55 }}>
-              {isManager && <button onClick={()=>mutate(d=>{const x=d.needs.find(i=>i.id===n.id);if(x)x.done=false;return d;})} style={{ width:26,height:26,borderRadius:"50%",border:"none",background:"#16a34a",cursor:"pointer",color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>✓</button>}
-              <div style={{ flex:1,textDecoration:"line-through",fontSize:13 }}>{n.text} <span style={{ color:"#444",fontSize:11 }}>· {n.by}</span></div>
-              {isManager && <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})} style={{ background:"none",border:"none",color:"#333",cursor:"pointer" }}>🗑️</button>}
-            </div>
-          ))}
-        </>
       )}
     </div>
   );
 }
+
 
 function StockPanel({ inventory, color }) {
   return (<div><Lbl>INVENTAIRE</Lbl>{inventory.map(item=>{const crit=item.qty<=item.min;return(<div key={item.id} style={{ background:"#0c0c0c",borderRadius:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${crit?"#ef4444":"#181818"}`,display:"flex",alignItems:"center",gap:12 }}>{crit&&<span>⚠️</span>}<div style={{ flex:1 }}><div style={{ fontWeight:700 }}>{item.name}</div><div style={{ fontSize:11,color:"#444" }}>Min: {item.min} {item.unit}</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:21,fontWeight:900,color:crit?"#ef4444":"#10b981" }}>{item.qty}</div><div style={{ fontSize:11,color:"#555" }}>{item.unit}</div></div></div>);})}</div>);
