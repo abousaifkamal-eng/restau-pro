@@ -112,7 +112,7 @@ const SC = {
   served:    { label: "Servie",     color: "#a78bfa", bg: "#100018", icon: "🍽️", next: "paid"      },
   paid:      { label: "Payée",      color: "#6b7280", bg: "#111",    icon: "💰", next: null         },
 };
-const ROLE_ADV = { chef: ["preparing","ready"], cashier: ["paid"], waiter: ["served"], manager: ["pending"] };
+const ROLE_ADV = { chef: ["preparing","ready"], cashier: ["preparing","ready","served","paid"], waiter: ["served"], manager: ["preparing","ready","served","paid","pending"] };
 
 // ── VOICE HOOK ────────────────────────────────────────────────────────────────
 function useVoice(onResult) {
@@ -758,11 +758,14 @@ function CashierApp({ db, mutate, session, onLogout, syncing }) {
   const cats = ["Tous", ...new Set(menu.map(m=>m.cat))];
   const menuItems = catFilter==="Tous" ? menu : menu.filter(m=>m.cat===catFilter);
 
+  const kitchenOrders = orders.filter(o => ["pending","preparing","ready"].includes(o.status));
+
   const tabs = [
-    { id:"cash",  icon:"💳", label:"Caisse",      badge: toEnc.length },
-    { id:"call",  icon:"📞", label:"Appel",        badge: 0 },
-    { id:"res",   icon:"🪑", label:"Réservations", badge: upcomingRes.length },
-    { id:"needs", icon:"🛒", label:"Besoins",      badge: needs.filter(n=>!n.done).length },
+    { id:"cash",    icon:"💳", label:"Caisse",      badge: toEnc.length },
+    { id:"kitchen", icon:"🔥", label:"Cuisine",     badge: kitchenOrders.filter(o=>o.status==="pending").length },
+    { id:"call",    icon:"📞", label:"Appel",        badge: 0 },
+    { id:"res",     icon:"🪑", label:"Réserv.",      badge: upcomingRes.length },
+    { id:"needs",   icon:"🛒", label:"Besoins",      badge: needs.filter(n=>!n.done).length },
   ];
 
   return (
@@ -782,6 +785,19 @@ function CashierApp({ db, mutate, session, onLogout, syncing }) {
           <Lbl style={{ marginTop:20 }}>📜 PAYÉES AUJOURD'HUI</Lbl>
           {paidToday.length===0 ? <Empty icon="📋" text="Aucune" /> :
             paidToday.map(o => <OrderCard key={o.id} order={o} color="#10b981" userRole="cashier" mutate={mutate} userName={user.name} readonly />)}
+        </div>
+      )}
+
+      {/* ── CUISINE ── */}
+      {tab==="kitchen" && (
+        <div>
+          <div style={{ background:"#0d0820",border:"1px solid #8b5cf633",borderRadius:12,padding:"12px 16px",marginBottom:14,fontSize:12,color:"#a78bfa" }}>
+            👨‍🍳 En tant que cuisinier-caissier, vous pouvez préparer et valider les commandes directement.
+          </div>
+          {kitchenOrders.length===0 ? <Empty icon="😴" text="Aucune commande en cuisine" /> :
+            kitchenOrders.sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).map(o => (
+              <OrderCard key={o.id} order={o} color={r.color} userRole="cashier" mutate={mutate} userName={user.name} />
+            ))}
         </div>
       )}
 
