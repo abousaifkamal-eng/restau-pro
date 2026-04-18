@@ -363,18 +363,23 @@ function FlashBanner({ flash, onClose }) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
 function LoginScreen({ db, onLogin }) {
-  const [step, setStep] = useState("pick");
-  const [rest, setRest] = useState(null);
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [err,  setErr]  = useState("");
+
   const login = () => {
     setErr("");
-    if (!rest && user === db.superAdmin.username && pass === db.superAdmin.password) { onLogin({ type:"super" }); return; }
-    const found = db.users.find(u => u.rId === rest?.id && u.username === user && u.password === pass);
-    if (found) onLogin({ type:"user", user:found, restaurant:rest });
-    else setErr("Identifiants incorrects");
+    // Super admin
+    if (user === db.superAdmin.username && pass === db.superAdmin.password) { onLogin({ type:"super" }); return; }
+    // Find user across ALL restaurants — staff only sees their own restaurant
+    const found = (db.users||[]).find(u => u.username === user && u.password === pass);
+    if (found) {
+      const rest = (db.restaurants||[]).find(r => r.id === found.rId);
+      if (rest) { onLogin({ type:"user", user:found, restaurant:rest }); return; }
+    }
+    setErr("Identifiants incorrects");
   };
+
   return (
     <div style={{ minHeight:"100vh",background:"#060606",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"Georgia,serif" }}>
       <div style={{ textAlign:"center",marginBottom:36 }}>
@@ -382,45 +387,17 @@ function LoginScreen({ db, onLogin }) {
         <h1 style={{ margin:"8px 0 4px",fontSize:30,fontWeight:900,color:"#fff",letterSpacing:5 }}>RESTAU<span style={{ color:"#D4A017" }}>PRO</span></h1>
         <div style={{ color:"#333",fontSize:10,letterSpacing:4 }}>GESTION EN TEMPS RÉEL</div>
       </div>
-      <div style={{ width:"100%",maxWidth:400,background:"#0f0f0f",borderRadius:20,border:"1px solid #1e1e1e",padding:26,boxShadow:"0 30px 80px rgba(0,0,0,.9)" }}>
-        {step === "pick" ? (
-          <>
-            <Lbl style={{ textAlign:"center",marginBottom:14 }}>CHOISISSEZ VOTRE RESTAURANT</Lbl>
-            {(db.restaurants||[]).map(r => (
-              <button key={r.id} onClick={() => { setRest(r); setStep("creds"); }}
-                style={{ width:"100%",background:"#141414",border:`1px solid ${r.color}33`,borderRadius:14,padding:16,marginBottom:10,cursor:"pointer",display:"flex",alignItems:"center",gap:14,transition:"all .2s" }}
-                onMouseOver={e=>e.currentTarget.style.borderColor=r.color}
-                onMouseOut={e=>e.currentTarget.style.borderColor=`${r.color}33`}>
-                <span style={{ fontSize:40 }}>{r.logo}</span>
-                <div style={{ textAlign:"left" }}>
-                  <div style={{ color:"#fff",fontWeight:700,fontSize:14 }}>{r.name}</div>
-                  <div style={{ color:"#555",fontSize:12 }}>{r.address}</div>
-                </div>
-              </button>
-            ))}
-            <button onClick={() => { setRest(null); setStep("creds"); }}
-              style={{ width:"100%",background:"transparent",border:"1px dashed #222",borderRadius:10,padding:12,cursor:"pointer",color:"#333",fontSize:13 }}>
-              👑 Administration
-            </button>
-          </>
-        ) : (
-          <>
-            {rest && (
-              <div style={{ display:"flex",alignItems:"center",gap:10,background:`${rest.color}11`,border:`1px solid ${rest.color}33`,borderRadius:10,padding:"10px 14px",marginBottom:18 }}>
-                <span style={{ fontSize:26 }}>{rest.logo}</span>
-                <div style={{ flex:1,color:"#fff",fontWeight:700,fontSize:14 }}>{rest.name}</div>
-                <button onClick={()=>setStep("pick")} style={{ background:"none",border:"none",color:rest.color,cursor:"pointer",fontSize:12 }}>← Changer</button>
-              </div>
-            )}
-            <FInp label="IDENTIFIANT" val={user} set={setUser} icon="👤" />
-            <FInp label="MOT DE PASSE" val={pass} set={setPass} icon="🔑" type="password" onEnter={login} />
-            {err && <div style={{ color:"#ef4444",fontSize:13,textAlign:"center",marginBottom:12 }}>{err}</div>}
-            <button onClick={login} style={{ width:"100%",background:"linear-gradient(135deg,#D4A017,#b8860b)",border:"none",borderRadius:12,padding:15,fontSize:15,fontWeight:900,color:"#060606",cursor:"pointer",letterSpacing:2 }}>
-              SE CONNECTER →
-            </button>
-            <div style={{ color:"#333",fontSize:11,textAlign:"center",marginTop:12 }}>Mot de passe: <strong style={{ color:"#555" }}>1234</strong> · logins: gerant / chef / caisse / serveur</div>
-          </>
-        )}
+      <div style={{ width:"100%",maxWidth:380,background:"#0f0f0f",borderRadius:20,border:"1px solid #1e1e1e",padding:26,boxShadow:"0 30px 80px rgba(0,0,0,.9)" }}>
+        <Lbl style={{ textAlign:"center",marginBottom:20 }}>CONNEXION</Lbl>
+        <FInp label="IDENTIFIANT" val={user} set={setUser} icon="👤" />
+        <FInp label="MOT DE PASSE" val={pass} set={setPass} icon="🔑" type="password" onEnter={login} />
+        {err && <div style={{ color:"#ef4444",fontSize:13,textAlign:"center",marginBottom:12 }}>{err}</div>}
+        <button onClick={login} style={{ width:"100%",background:"linear-gradient(135deg,#D4A017,#b8860b)",border:"none",borderRadius:12,padding:15,fontSize:15,fontWeight:900,color:"#060606",cursor:"pointer",letterSpacing:2 }}>
+          SE CONNECTER →
+        </button>
+        <div style={{ color:"#333",fontSize:11,textAlign:"center",marginTop:16,lineHeight:1.8 }}>
+          Chaque membre du staff se connecte avec<br/>son identifiant personnel unique
+        </div>
       </div>
     </div>
   );
