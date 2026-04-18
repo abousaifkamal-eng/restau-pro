@@ -1,6 +1,75 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { loadFromFirestore, saveToFirestore, subscribeToFirestore } from "./firebase.js";
 
+
+// ── BESOINS CATALOGUE ────────────────────────────────────────────────────────
+const NEEDS_CATALOG = {
+  "Viande": {
+    emoji: "🥩", color: "#c0392b",
+    products: [
+      { name: "Agneau", img: "https://images.unsplash.com/photo-1603048297172-c92544798d5a?w=120&h=120&fit=crop" },
+      { name: "Bœuf haché", img: "https://images.unsplash.com/photo-1588347818036-c4f5c23a8a79?w=120&h=120&fit=crop" },
+      { name: "Kefta", img: "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=120&h=120&fit=crop" },
+      { name: "Foie", img: "https://images.unsplash.com/photo-1607198179219-568e8e3e3483?w=120&h=120&fit=crop" },
+      { name: "Côtelettes", img: "https://images.unsplash.com/photo-1558030006-450675393462?w=120&h=120&fit=crop" },
+      { name: "Brochettes", img: "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=120&h=120&fit=crop" },
+    ]
+  },
+  "Poulet": {
+    emoji: "🍗", color: "#e67e22",
+    products: [
+      { name: "Poulet entier", img: "https://images.unsplash.com/photo-1604503468506-a8da13d11d36?w=120&h=120&fit=crop" },
+      { name: "Ailes", img: "https://images.unsplash.com/photo-1527477396000-e27163b481c2?w=120&h=120&fit=crop" },
+      { name: "Cuisses", img: "https://images.unsplash.com/photo-1598103442097-8b74394b95c7?w=120&h=120&fit=crop" },
+      { name: "Filet poulet", img: "https://images.unsplash.com/photo-1604503468506-a8da13d11d36?w=120&h=120&fit=crop" },
+      { name: "Brochettes poulet", img: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=120&h=120&fit=crop" },
+    ]
+  },
+  "Épicerie": {
+    emoji: "🛒", color: "#8b2500",
+    products: [
+      { name: "Huile d'olive", img: "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=120&h=120&fit=crop" },
+      { name: "Farine", img: "https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=120&h=120&fit=crop" },
+      { name: "Riz", img: "https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?w=120&h=120&fit=crop" },
+      { name: "Lentilles", img: "https://images.unsplash.com/photo-1515543904379-3d757afe72e4?w=120&h=120&fit=crop" },
+      { name: "Pois chiches", img: "https://images.unsplash.com/photo-1612257416648-e31dd68b3b44?w=120&h=120&fit=crop" },
+      { name: "Tahini", img: "https://images.unsplash.com/photo-1612257416648-e31dd68b3b44?w=120&h=120&fit=crop" },
+      { name: "Sel", img: "https://images.unsplash.com/photo-1518110925495-5fe2fda0442c?w=120&h=120&fit=crop" },
+      { name: "Épices", img: "https://images.unsplash.com/photo-1532336414038-cf19250c5757?w=120&h=120&fit=crop" },
+      { name: "Pain pita", img: "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=120&h=120&fit=crop" },
+      { name: "Boulgour", img: "https://images.unsplash.com/photo-1515543904379-3d757afe72e4?w=120&h=120&fit=crop" },
+    ]
+  },
+  "Légumes": {
+    emoji: "🥗", color: "#27ae60",
+    products: [
+      { name: "Tomates", img: "https://images.unsplash.com/photo-1546470427-e26264be0b0d?w=120&h=120&fit=crop" },
+      { name: "Oignons", img: "https://images.unsplash.com/photo-1508747703725-719777637510?w=120&h=120&fit=crop" },
+      { name: "Ail", img: "https://images.unsplash.com/photo-1540148426945-6cf22a6b2383?w=120&h=120&fit=crop" },
+      { name: "Aubergines", img: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=120&h=120&fit=crop" },
+      { name: "Courgettes", img: "https://images.unsplash.com/photo-1596187407535-e2a01b2a5fdc?w=120&h=120&fit=crop" },
+      { name: "Poivrons", img: "https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=120&h=120&fit=crop" },
+      { name: "Concombres", img: "https://images.unsplash.com/photo-1589621316382-008455b857cd?w=120&h=120&fit=crop" },
+      { name: "Persil", img: "https://images.unsplash.com/photo-1588943211346-0908a1fb0b01?w=120&h=120&fit=crop" },
+      { name: "Menthe", img: "https://images.unsplash.com/photo-1628556270448-4d4e4148e1b1?w=120&h=120&fit=crop" },
+      { name: "Pommes de terre", img: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=120&h=120&fit=crop" },
+      { name: "Chou-fleur", img: "https://images.unsplash.com/photo-1613743983303-b3e89f8a2b80?w=120&h=120&fit=crop" },
+      { name: "Salade", img: "https://images.unsplash.com/photo-1622206151226-18ca2c9ab4a1?w=120&h=120&fit=crop" },
+    ]
+  },
+  "Fruits": {
+    emoji: "🍋", color: "#f39c12",
+    products: [
+      { name: "Citrons", img: "https://images.unsplash.com/photo-1587486913049-53fc88980cfc?w=120&h=120&fit=crop" },
+      { name: "Oranges", img: "https://images.unsplash.com/photo-1547514701-42782101795e?w=120&h=120&fit=crop" },
+      { name: "Grenades", img: "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=120&h=120&fit=crop" },
+      { name: "Figues", img: "https://images.unsplash.com/photo-1592995202007-e4d4ed9a4d18?w=120&h=120&fit=crop" },
+      { name: "Raisins", img: "https://images.unsplash.com/photo-1423483641154-5411ec9c0ddf?w=120&h=120&fit=crop" },
+      { name: "Pastèque", img: "https://images.unsplash.com/photo-1568909344668-6f14a07b56a0?w=120&h=120&fit=crop" },
+    ]
+  }
+};
+
 // ── INITIAL DATA ──────────────────────────────────────────────────────────────
 const INITIAL_DB = {
   restaurants: [
@@ -1263,30 +1332,121 @@ function OrdersPanel({ orders, color, userRole, mutate, userName }) {
 }
 
 function NeedsPanel({ needs, rId, user, mutate, color, isManager }) {
-  const addNeed = useCallback((text) => {
+  const [activecat, setActiveCat] = useState(null);
+  const [manualText, setManualText] = useState("");
+  const [qty, setQty] = useState("1");
+
+  const addNeed = useCallback((text, category) => {
     if (!text?.trim()) return;
-    const need = { id:uid(), rId, text:text.trim(), by:user.name, avatar:user.avatar, createdAt:ts(), done:false };
+    const need = { id:uid(), rId, text:text.trim(), category:category||"Autre", by:user.name, avatar:user.avatar, createdAt:ts(), done:false };
     mutate(d=>{ d.needs.push(need); return d; }, { type:"need", data:need });
+    setManualText(""); setQty("1");
   }, [rId, user, mutate]);
-  const pending = needs.filter(n=>!n.done); const done = needs.filter(n=>n.done);
+
+  const addProduct = (product, cat) => {
+    const text = qty && qty !== "1" ? `${product.name} × ${qty}` : product.name;
+    addNeed(text, cat);
+  };
+
+  const pending = needs.filter(n=>!n.done);
+  const done = needs.filter(n=>n.done);
+  const cats = Object.keys(NEEDS_CATALOG);
+
   return (
     <div>
-      <Pane color="#3b82f6" title="📣 SIGNALER UN BESOIN"><VoiceInput onSubmit={addNeed} placeholder='Ex: "il manque du beurre"' buttonLabel="Signaler" /></Pane>
+      {/* Category selector */}
+      <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
+        {cats.map(cat => {
+          const c = NEEDS_CATALOG[cat];
+          return (
+            <button key={cat} onClick={()=>setActiveCat(activecat===cat?null:cat)}
+              style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"10px 14px",borderRadius:12,border:`2px solid ${activecat===cat?c.color:"#2a2a2a"}`,background:activecat===cat?`${c.color}22`:"#111",cursor:"pointer",minWidth:70,transition:"all .2s" }}>
+              <span style={{ fontSize:26 }}>{c.emoji}</span>
+              <span style={{ color:activecat===cat?c.color:"#888",fontSize:11,fontWeight:700 }}>{cat}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Products grid for selected category */}
+      {activecat && (
+        <div style={{ background:"#0c0c0c",borderRadius:14,padding:14,marginBottom:16,border:`1px solid ${NEEDS_CATALOG[activecat].color}33` }}>
+          <div style={{ color:NEEDS_CATALOG[activecat].color,fontSize:10,letterSpacing:2,fontWeight:700,marginBottom:12 }}>
+            {NEEDS_CATALOG[activecat].emoji} {activecat.toUpperCase()} — CLIQUEZ POUR AJOUTER
+          </div>
+          {/* Quantity selector */}
+          <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:14 }}>
+            <span style={{ color:"#888",fontSize:12 }}>Quantité :</span>
+            <QB onClick={()=>setQty(q=>String(Math.max(1,parseInt(q)-1)))}>−</QB>
+            <input value={qty} onChange={e=>setQty(e.target.value)}
+              style={{ width:50,textAlign:"center",background:"#1a1a1a",border:"1px solid #333",borderRadius:6,padding:"6px",color:"#fff",fontSize:15,fontWeight:700,outline:"none" }} />
+            <QB onClick={()=>setQty(q=>String(parseInt(q)+1))}>+</QB>
+            <span style={{ color:"#555",fontSize:12 }}>kg / unités</span>
+          </div>
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:10 }}>
+            {NEEDS_CATALOG[activecat].products.map(product => (
+              <button key={product.name} onClick={()=>addProduct(product, activecat)}
+                style={{ background:"#1a1a1a",border:"1px solid #2a2a2a",borderRadius:10,padding:8,cursor:"pointer",textAlign:"center",transition:"all .15s",overflow:"hidden" }}
+                onMouseOver={e=>{e.currentTarget.style.borderColor=NEEDS_CATALOG[activecat].color;e.currentTarget.style.background=`${NEEDS_CATALOG[activecat].color}15`;}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="#1a1a1a";}}>
+                <img src={product.img} alt={product.name}
+                  style={{ width:"100%",height:64,objectFit:"cover",borderRadius:6,marginBottom:6,display:"block" }}
+                  onError={e=>{e.target.style.display="none";}} />
+                <div style={{ color:"#fff",fontSize:11,fontWeight:600 }}>{product.name}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Manual input */}
+      <Pane color="#3b82f6" title="✍️ SAISIE MANUELLE OU VOCALE">
+        <VoiceInput onSubmit={(t)=>addNeed(t, activecat||"Autre")} placeholder='Ex: "sauce tomate × 3"' buttonLabel="Ajouter" />
+      </Pane>
+
+      {/* Pending list grouped by category */}
       <Lbl>EN ATTENTE ({pending.length})</Lbl>
-      {pending.length===0?<Empty icon="✅" text="Rien à acheter !" />:pending.map(n=>(
-        <div key={n.id} style={{ background:"#0a0f1a",border:"1px solid #1e3050",borderRadius:12,padding:"12px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12 }}>
-          {isManager && <button onClick={()=>mutate(d=>{const x=d.needs.find(i=>i.id===n.id);if(x)x.done=true;return d;})} style={{ width:26,height:26,borderRadius:"50%",border:"2px solid #3b82f6",background:"transparent",cursor:"pointer",flexShrink:0,color:"#3b82f6",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center" }}>✓</button>}
-          <div style={{ flex:1 }}><div style={{ fontSize:14,fontWeight:600 }}>{n.text}</div><div style={{ color:"#444",fontSize:11,marginTop:2 }}>{n.avatar} {n.by} · {fmt(n.createdAt)}</div></div>
-          {isManager && <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})} style={{ background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:18 }}>🗑️</button>}
+      {pending.length===0 ? <Empty icon="✅" text="Rien à acheter !" /> : (
+        <div>
+          {cats.concat(["Autre"]).map(cat => {
+            const catNeeds = pending.filter(n => (n.category||"Autre") === cat);
+            if (catNeeds.length === 0) return null;
+            const c = NEEDS_CATALOG[cat] || { emoji:"📦", color:"#888" };
+            return (
+              <div key={cat} style={{ marginBottom:16 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                  <span style={{ fontSize:18 }}>{c.emoji}</span>
+                  <span style={{ color:c.color||"#888",fontSize:11,letterSpacing:2,fontWeight:700 }}>{cat.toUpperCase()} ({catNeeds.length})</span>
+                </div>
+                {catNeeds.map(n=>(
+                  <div key={n.id} style={{ background:"#0a0f1a",border:"1px solid #1e3050",borderRadius:12,padding:"11px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:12 }}>
+                    {isManager && <button onClick={()=>mutate(d=>{const x=d.needs.find(i=>i.id===n.id);if(x)x.done=true;return d;})} style={{ width:26,height:26,borderRadius:"50%",border:`2px solid ${c.color||"#3b82f6"}`,background:"transparent",cursor:"pointer",flexShrink:0,color:c.color||"#3b82f6",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center" }}>✓</button>}
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:14,fontWeight:600 }}>{n.text}</div>
+                      <div style={{ color:"#444",fontSize:11,marginTop:2 }}>{n.avatar} {n.by} · {fmt(n.createdAt)}</div>
+                    </div>
+                    {isManager && <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})} style={{ background:"none",border:"none",color:"#333",cursor:"pointer",fontSize:18 }}>🗑️</button>}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
-      ))}
-      {done.length>0 && (<><Lbl style={{ marginTop:16 }}>ACHETÉ ({done.length})</Lbl>{done.map(n=>(
-        <div key={n.id} style={{ background:"#0a120a",border:"1px solid #1a2e1a",borderRadius:12,padding:"10px 14px",marginBottom:8,display:"flex",alignItems:"center",gap:12,opacity:.55 }}>
-          {isManager && <button onClick={()=>mutate(d=>{const x=d.needs.find(i=>i.id===n.id);if(x)x.done=false;return d;})} style={{ width:26,height:26,borderRadius:"50%",border:"none",background:"#16a34a",cursor:"pointer",color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>✓</button>}
-          <div style={{ flex:1,textDecoration:"line-through",fontSize:13 }}>{n.text} <span style={{ color:"#444",fontSize:11 }}>· {n.by}</span></div>
-          {isManager && <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})} style={{ background:"none",border:"none",color:"#333",cursor:"pointer" }}>🗑️</button>}
-        </div>
-      ))}</>)}
+      )}
+
+      {/* Done list */}
+      {done.length>0 && (
+        <>
+          <Lbl style={{ marginTop:16 }}>✅ ACHETÉ ({done.length})</Lbl>
+          {done.map(n=>(
+            <div key={n.id} style={{ background:"#0a120a",border:"1px solid #1a2e1a",borderRadius:12,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:12,opacity:.55 }}>
+              {isManager && <button onClick={()=>mutate(d=>{const x=d.needs.find(i=>i.id===n.id);if(x)x.done=false;return d;})} style={{ width:26,height:26,borderRadius:"50%",border:"none",background:"#16a34a",cursor:"pointer",color:"#fff",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>✓</button>}
+              <div style={{ flex:1,textDecoration:"line-through",fontSize:13 }}>{n.text} <span style={{ color:"#444",fontSize:11 }}>· {n.by}</span></div>
+              {isManager && <button onClick={()=>mutate(d=>{d.needs=d.needs.filter(x=>x.id!==n.id);return d;})} style={{ background:"none",border:"none",color:"#333",cursor:"pointer" }}>🗑️</button>}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
