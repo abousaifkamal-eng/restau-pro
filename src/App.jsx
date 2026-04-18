@@ -714,8 +714,8 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
     <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
 
       {tab==="call" && !calling && (
-        <div style={{ textAlign:"center",paddingTop:36 }}>
-          <div style={{ color:"#333",fontSize:10,letterSpacing:3,marginBottom:36 }}>CUISINIER - PRISE DE COMMANDE</div>
+        <div style={{ textAlign:"center",paddingTop:60,minHeight:"60vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center" }}>
+          <div style={{ color:"#555",fontSize:10,letterSpacing:3,marginBottom:36 }}>CUISINIER · PRISE DE COMMANDE</div>
           <div style={{ position:"relative",display:"inline-block",marginBottom:44 }}>
             <div style={{ position:"absolute",inset:-18,borderRadius:"50%",background:"#16a34a0e",animation:"ring1 2s ease-out infinite" }} />
             <button onClick={()=>setCalling(true)} style={{ position:"relative",width:160,height:160,borderRadius:"50%",border:"none",background:"linear-gradient(145deg,#16a34a,#15803d)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 0 50px #16a34a33" }}>
@@ -730,8 +730,11 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
       {tab==="call" && calling && (
         <div>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
-            <span style={{ color:"#16a34a",fontWeight:900,fontSize:12,letterSpacing:2 }}>APPEL EN COURS</span>
-            <button onClick={resetChefForm} style={{ background:"#1a0808",border:"1px solid #ef4444",borderRadius:8,padding:"6px 12px",color:"#ef4444",cursor:"pointer",fontSize:12 }}>Raccrocher</button>
+            <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+              <span style={{ width:8,height:8,borderRadius:"50%",background:"#16a34a",display:"inline-block",animation:"blink 1s infinite" }} />
+              <span style={{ color:"#16a34a",fontWeight:900,fontSize:12,letterSpacing:2 }}>APPEL EN COURS</span>
+            </div>
+            <button onClick={resetChefForm} style={{ background:"#1a0808",border:"1px solid #ef4444",borderRadius:8,padding:"6px 12px",color:"#ef4444",cursor:"pointer",fontSize:12 }}>✕ Raccrocher</button>
           </div>
           <div style={{ display:"flex",gap:4,marginBottom:16 }}>
             {[["info","1.Client"],["items","2.Articles"],["time","3.Heure"],["confirm","4.Confirmer"]].map(([id,lb])=>(
