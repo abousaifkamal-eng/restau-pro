@@ -106,42 +106,39 @@ const INITIAL_DB = {
       { id: "m12", name: "Tiramisu",         cat: "Desserts", price: 6.5,  prep: 3,  emoji: "🍰" },
     ],
     r3: [
-      // ── MEZZE FROIDS ──
-      { id: "r3m1",  name: "Taboulée",              cat: "Mezze",      price: 10.0, prep: 5,  emoji: "🥗" },
-      { id: "r3m2",  name: "Kébbé Nayé",            cat: "Mezze",      price: 10.0, prep: 5,  emoji: "🥩" },
-      { id: "r3m3",  name: "Salade Fatouch",         cat: "Mezze",      price: 10.0, prep: 5,  emoji: "🥗" },
-      { id: "r3m4",  name: "Hommos",                 cat: "Mezze",      price: 7.0,  prep: 5,  emoji: "🫘" },
-      { id: "r3m5",  name: "Moutabal",               cat: "Mezze",      price: 7.0,  prep: 5,  emoji: "🍆" },
-      { id: "r3m6",  name: "Labna",                  cat: "Mezze",      price: 6.0,  prep: 5,  emoji: "🥛" },
-      { id: "r3m7",  name: "Kébbé Meklié",           cat: "Mezze",      price: 10.0, prep: 10, emoji: "🥙" },
-      { id: "r3m8",  name: "Foul Medmas",            cat: "Mezze",      price: 7.0,  prep: 8,  emoji: "🫘" },
-      { id: "r3m9",  name: "Hommos bi lahmi",        cat: "Mezze",      price: 12.0, prep: 10, emoji: "🫘" },
-      { id: "r3m10", name: "Baba Ghanouj",           cat: "Mezze",      price: 7.0,  prep: 5,  emoji: "🍆" },
-      { id: "r3m11", name: "Awerak Ainabe",          cat: "Mezze",      price: 7.0,  prep: 10, emoji: "🍃" },
-      { id: "r3m12", name: "Mojadara",               cat: "Mezze",      price: 7.0,  prep: 8,  emoji: "🌾" },
-      { id: "r3m13", name: "Chou-fleur",             cat: "Mezze",      price: 7.0,  prep: 8,  emoji: "🥦" },
-      { id: "r3m14", name: "Riz",                    cat: "Mezze",      price: 7.0,  prep: 5,  emoji: "🍚" },
-      { id: "r3m15", name: "Batata Harra",           cat: "Mezze",      price: 7.0,  prep: 10, emoji: "🥔" },
-      { id: "r3m16", name: "Falafel",                cat: "Mezze",      price: 7.0,  prep: 10, emoji: "🧆" },
-      { id: "r3m17", name: "Musakaa",                cat: "Mezze",      price: 7.0,  prep: 10, emoji: "🍆" },
-      { id: "r3m18", name: "Falafel Plat",           cat: "Mezze",      price: 14.0, prep: 15, emoji: "🧆" },
-      // ── GRILLADES ──
-      { id: "r3m19", name: "Ailes de poulet",        cat: "Grillades",  price: 18.0, prep: 25, emoji: "🍗" },
-      { id: "r3m20", name: "Brochettes de poulet",   cat: "Grillades",  price: 18.0, prep: 20, emoji: "🍢" },
-      { id: "r3m21", name: "1/2 Poulet Grillé",      cat: "Grillades",  price: 18.0, prep: 25, emoji: "🍗" },
-      { id: "r3m22", name: "Frrouj Mechwi",          cat: "Grillades",  price: 18.0, prep: 30, emoji: "🍗" },
-      { id: "r3m23", name: "Plat de Paille",         cat: "Grillades",  price: 18.0, prep: 20, emoji: "🥩" },
-      { id: "r3m24", name: "Plat Végétarien",        cat: "Grillades",  price: 14.0, prep: 15, emoji: "🥗" },
-      { id: "r3m25", name: "Brochettes de viande",   cat: "Grillades",  price: 20.0, prep: 20, emoji: "🥩" },
-      { id: "r3m26", name: "Brochettes de Kefta",    cat: "Grillades",  price: 18.0, prep: 20, emoji: "🍢" },
-      { id: "r3m27", name: "Brochettes de foie",     cat: "Grillades",  price: 18.0, prep: 20, emoji: "🍢" },
-      { id: "r3m28", name: "Brochettes Mixte",       cat: "Grillades",  price: 18.0, prep: 20, emoji: "🍢" },
-      { id: "r3m29", name: "Côtelettes d'agneau",    cat: "Grillades",  price: 20.0, prep: 25, emoji: "🥩" },
-      { id: "r3m30", name: "1 Kg Mechwi Mixte",      cat: "Grillades",  price: 44.0, prep: 35, emoji: "🔥" },
-      // ── MENUS SPÉCIAUX ──
-      { id: "r3m31", name: "Menu Duo Spécial",       cat: "Menus",      price: 69.0, prep: 35, emoji: "🍽️" },
-      { id: "r3m32", name: "Menu Spécial Layali Cham", cat: "Menus",    price: 99.0, prep: 40, emoji: "👑" },
-      { id: "r3m33", name: "Fish Layali Cham Grillé", cat: "Menus",     price: 25.0, prep: 30, emoji: "🐟" },
+      { id:"r3m1",  name:"Taboulée",              cat:"Mezze",     price:10.0, prep:5,  emoji:"🥗", img:"https://images.unsplash.com/photo-1593001872095-7d5b3868fb1d?w=200&h=200&fit=crop" },
+      { id:"r3m2",  name:"Kébbé Nayé",            cat:"Mezze",     price:10.0, prep:5,  emoji:"🥩", img:"https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=200&h=200&fit=crop" },
+      { id:"r3m3",  name:"Salade Fatouch",         cat:"Mezze",     price:10.0, prep:5,  emoji:"🥗", img:"https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=200&fit=crop" },
+      { id:"r3m4",  name:"Hommos",                 cat:"Mezze",     price:7.0,  prep:5,  emoji:"🫘", img:"https://images.unsplash.com/photo-1577805947697-89e18249d767?w=200&h=200&fit=crop" },
+      { id:"r3m5",  name:"Moutabal",               cat:"Mezze",     price:7.0,  prep:5,  emoji:"🍆", img:"https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=200&h=200&fit=crop" },
+      { id:"r3m6",  name:"Labna",                  cat:"Mezze",     price:6.0,  prep:5,  emoji:"🥛", img:"https://images.unsplash.com/photo-1563227812-0ea4c22e6cc8?w=200&h=200&fit=crop" },
+      { id:"r3m7",  name:"Kébbé Meklié",           cat:"Mezze",     price:10.0, prep:10, emoji:"🥙", img:"https://images.unsplash.com/photo-1541614101331-1a5a3a194e92?w=200&h=200&fit=crop" },
+      { id:"r3m8",  name:"Foul Medmas",            cat:"Mezze",     price:7.0,  prep:8,  emoji:"🫘", img:"https://images.unsplash.com/photo-1515543904379-3d757afe72e4?w=200&h=200&fit=crop" },
+      { id:"r3m9",  name:"Hommos bi lahmi",        cat:"Mezze",     price:12.0, prep:10, emoji:"🫘", img:"https://images.unsplash.com/photo-1577805947697-89e18249d767?w=200&h=200&fit=crop" },
+      { id:"r3m10", name:"Baba Ghanouj",           cat:"Mezze",     price:7.0,  prep:5,  emoji:"🍆", img:"https://images.unsplash.com/photo-1570197788417-0e82375c9371?w=200&h=200&fit=crop" },
+      { id:"r3m11", name:"Awerak Ainabe",          cat:"Mezze",     price:7.0,  prep:10, emoji:"🍃", img:"https://images.unsplash.com/photo-1606756790138-261d2b21cd75?w=200&h=200&fit=crop" },
+      { id:"r3m12", name:"Mojadara",               cat:"Mezze",     price:7.0,  prep:8,  emoji:"🌾", img:"https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?w=200&h=200&fit=crop" },
+      { id:"r3m13", name:"Chou-fleur",             cat:"Mezze",     price:7.0,  prep:8,  emoji:"🥦", img:"https://images.unsplash.com/photo-1613743983303-b3e89f8a2b80?w=200&h=200&fit=crop" },
+      { id:"r3m14", name:"Riz",                    cat:"Mezze",     price:7.0,  prep:5,  emoji:"🍚", img:"https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?w=200&h=200&fit=crop" },
+      { id:"r3m15", name:"Batata Harra",           cat:"Mezze",     price:7.0,  prep:10, emoji:"🥔", img:"https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=200&h=200&fit=crop" },
+      { id:"r3m16", name:"Falafel",                cat:"Mezze",     price:7.0,  prep:10, emoji:"🧆", img:"https://images.unsplash.com/photo-1593001872095-7d5b3868fb1d?w=200&h=200&fit=crop" },
+      { id:"r3m17", name:"Musakaa",                cat:"Mezze",     price:7.0,  prep:10, emoji:"🍆", img:"https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=200&h=200&fit=crop" },
+      { id:"r3m18", name:"Falafel Plat",           cat:"Mezze",     price:14.0, prep:15, emoji:"🧆", img:"https://images.unsplash.com/photo-1547592180-85f173990554?w=200&h=200&fit=crop" },
+      { id:"r3m19", name:"Ailes de poulet",        cat:"Grillades", price:18.0, prep:25, emoji:"🍗", img:"https://images.unsplash.com/photo-1527477396000-e27163b481c2?w=200&h=200&fit=crop" },
+      { id:"r3m20", name:"Brochettes de poulet",   cat:"Grillades", price:18.0, prep:20, emoji:"🍢", img:"https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=200&h=200&fit=crop" },
+      { id:"r3m21", name:"1/2 Poulet Grillé",      cat:"Grillades", price:18.0, prep:25, emoji:"🍗", img:"https://images.unsplash.com/photo-1598103442097-8b74394b95c7?w=200&h=200&fit=crop" },
+      { id:"r3m22", name:"Frrouj Mechwi",          cat:"Grillades", price:18.0, prep:30, emoji:"🍗", img:"https://i.imgur.com/x4ZSZe9.png" },
+      { id:"r3m23", name:"Plat de Paille",         cat:"Grillades", price:18.0, prep:20, emoji:"🥩", img:"https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=200&h=200&fit=crop" },
+      { id:"r3m24", name:"Plat Végétarien",        cat:"Grillades", price:14.0, prep:15, emoji:"🥗", img:"https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=200&fit=crop" },
+      { id:"r3m25", name:"Brochettes de viande",   cat:"Grillades", price:20.0, prep:20, emoji:"🥩", img:"https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=200&h=200&fit=crop" },
+      { id:"r3m26", name:"Brochettes de Kefta",    cat:"Grillades", price:18.0, prep:20, emoji:"🍢", img:"https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=200&h=200&fit=crop" },
+      { id:"r3m27", name:"Brochettes de foie",     cat:"Grillades", price:18.0, prep:20, emoji:"🍢", img:"https://images.unsplash.com/photo-1607198179219-568e8e3e3483?w=200&h=200&fit=crop" },
+      { id:"r3m28", name:"Brochettes Mixte",       cat:"Grillades", price:18.0, prep:20, emoji:"🍢", img:"https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=200&h=200&fit=crop" },
+      { id:"r3m29", name:"Côtelettes d'agneau",    cat:"Grillades", price:20.0, prep:25, emoji:"🥩", img:"https://images.unsplash.com/photo-1558030006-450675393462?w=200&h=200&fit=crop" },
+      { id:"r3m30", name:"1 Kg Mechwi Mixte",      cat:"Grillades", price:44.0, prep:35, emoji:"🔥", img:"https://images.unsplash.com/photo-1544025162-d76694265947?w=200&h=200&fit=crop" },
+      { id:"r3m31", name:"Menu Duo Spécial",       cat:"Menus",     price:69.0, prep:35, emoji:"🍽️", img:"https://images.unsplash.com/photo-1544025162-d76694265947?w=200&h=200&fit=crop" },
+      { id:"r3m32", name:"Menu Spécial Layali Cham", cat:"Menus",   price:99.0, prep:40, emoji:"👑", img:"https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=200&h=200&fit=crop" },
+      { id:"r3m33", name:"Fish Layali Cham Grillé", cat:"Menus",    price:25.0, prep:30, emoji:"🐟", img:"https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=200&h=200&fit=crop" },
     ]
   },
   orders: [],
@@ -560,7 +557,7 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
   const [catFilter, setCatFilter] = useState("Tous");
   const [pickupAt, setPickupAt] = useState(defaultPickup);
 
-  const addToCart = (item) => setCart(p => { const ex = p.find(x => x.mid === item.id); return ex ? p.map(x => x.mid===item.id?{...x,qty:x.qty+1}:x) : [...p,{mid:item.id,name:item.name,price:item.price,qty:1,emoji:item.emoji}]; });
+  const addToCart = (item) => setCart(p => { const ex = p.find(x => x.mid === item.id); return ex ? p.map(x => x.mid===item.id?{...x,qty:x.qty+1}:x) : [...p,{mid:item.id,name:item.name,price:item.price,qty:1,emoji:item.emoji,img:item.img||null}]; });
   const handleVoice = useCallback((text) => {
     const lower = text.toLowerCase();
     menu.forEach(item => { if (lower.includes(item.name.toLowerCase())) addToCart(item); });
@@ -692,12 +689,14 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
                 </div>
                 <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8 }}>
                   {menuItems.map(item => (
-                    <button key={item.id} onClick={()=>addToCart(item)} style={{ background:"#111",border:"1px solid #1a1a1a",borderRadius:10,padding:9,cursor:"pointer",textAlign:"center",color:"#fff",transition:"all .15s" }}
+                    <button key={item.id} onClick={()=>addToCart(item)} style={{ background:"#111",border:"1px solid #1a1a1a",borderRadius:10,padding:0,cursor:"pointer",textAlign:"center",color:"#fff",transition:"all .15s",overflow:"hidden" }}
                       onMouseOver={e=>{e.currentTarget.style.borderColor=r.color;e.currentTarget.style.background=`${r.color}11`;}}
                       onMouseOut={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.background="#111";}}>
-                      <div style={{ fontSize:24 }}>{item.emoji}</div>
-                      <div style={{ fontSize:10,fontWeight:700,margin:"3px 0" }}>{item.name}</div>
-                      <div style={{ color:r.color,fontSize:11,fontWeight:800 }}>{item.price.toFixed(2)}€</div>
+                      {item.img ? <img src={item.img} alt={item.name} style={{ width:"100%",height:80,objectFit:"cover",display:"block" }} onError={e=>e.target.style.display="none"} /> : <div style={{ fontSize:28,padding:"10px 0" }}>{item.emoji}</div>}
+                      <div style={{ padding:"6px 4px" }}>
+                        <div style={{ fontSize:10,fontWeight:700,marginBottom:2,lineHeight:1.2 }}>{item.name}</div>
+                        <div style={{ color:r.color,fontSize:12,fontWeight:900 }}>{item.price.toFixed(2)}€</div>
+                      </div>
                     </button>
                   ))}
                 </div>
