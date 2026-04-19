@@ -22,7 +22,7 @@ try {
   console.warn("Messaging not supported:", e);
 }
 
-const VAPID_KEY = "BEl62iUYgUivxIkv69yViEuiBIa40HI80NM9LdBpUR_FNiNKAtmW7w-EyKd1PZlVU_rX6HJcKYFV2xWGHJo";
+const VAPID_KEY = "BMpbtlKTZRVPmZSJ37-uXKgR0h8qgjWNEAIEHPPBhKu122NNZk4vQkfDJQ5A2imr3gcGSPVwBuvdvT6-o2UsQJc";
 
 export async function requestNotificationPermission() {
   if (!messaging) return null;
