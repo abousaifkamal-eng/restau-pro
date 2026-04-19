@@ -252,21 +252,24 @@ function useOrderAlert(db, session) {
 
   const playAlert = useCallback(() => {
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      // Belle mélodie d'alerte 4 notes
-      [[880,0],[660,0.25],[880,0.5],[1100,0.75]].forEach(([freq, delay]) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.45, ctx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
-        osc.start(ctx.currentTime + delay);
-        osc.stop(ctx.currentTime + delay + 0.35);
+      // Use global audio context (already unlocked by user interaction)
+      let ctx = getAudioCtx();
+      if (!ctx) return;
+      // Resume if suspended (mobile)
+      const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
+      resume.then(() => {
+        [[880,0],[660,0.22],[880,0.44],[1100,0.66]].forEach(([freq, delay]) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.5, ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.28);
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + 0.32);
+        });
       });
     } catch(e) { console.log('Audio error:', e); }
   }, []);
@@ -375,11 +378,42 @@ function OrderAlertBanner({ order, onAccept }) {
 
 
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
+// Global audio context that gets unlocked on first user interaction
+let globalAudioCtx = null;
+function getAudioCtx() {
+  if (!globalAudioCtx) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) globalAudioCtx = new AC();
+    } catch(e) {}
+  }
+  return globalAudioCtx;
+}
+
 export default function App() {
   const [db, setDb] = useState(null); // null = loading
   const [session, setSession] = useState(null);
   const [flash, setFlash] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+
+  // Unlock audio on first touch/click (required for mobile)
+  useEffect(() => {
+    const unlock = () => {
+      const ctx = getAudioCtx();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(() => setAudioUnlocked(true));
+      } else {
+        setAudioUnlocked(true);
+      }
+    };
+    document.addEventListener('touchstart', unlock, { once: true });
+    document.addEventListener('click', unlock, { once: true });
+    return () => {
+      document.removeEventListener('touchstart', unlock);
+      document.removeEventListener('click', unlock);
+    };
+  }, []);
   const flashTimer = useRef(null);
   const saveTimer = useRef(null);
   const localVersion = useRef(0);
@@ -567,6 +601,10 @@ function LoginScreen({ db, onLogin }) {
         <button onClick={login} style={{ width:"100%",background:"linear-gradient(135deg,#D4A017,#b8860b)",border:"none",borderRadius:12,padding:15,fontSize:15,fontWeight:900,color:"#060606",cursor:"pointer",letterSpacing:2 }}>
           SE CONNECTER →
         </button>
+        <div style={{ color:"#333",fontSize:11,textAlign:"center",marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+          <span style={{ fontSize:14 }}>🔔</span>
+          <span>Touchez l'écran pour activer les alertes sonores</span>
+        </div>
         <div style={{ color:"#333",fontSize:11,textAlign:"center",marginTop:16,lineHeight:1.8 }}>
           Chaque membre du staff se connecte avec<br/>son identifiant personnel unique
         </div>
