@@ -338,7 +338,7 @@ function useOrderAlert(db, session) {
 
   return { alertOrder, dismissAlert };
 }
-js// ── SCHEDULED ALERTS HOOK ────────────────────────────────────────────────────
+// ── SCHEDULED ALERTS HOOK ────────────────────────────────────────────────────
 function useScheduledAlerts(db, session, mutate) {
   const [alert30, setAlert30] = useState(null);
   const dismissedRef = useRef(new Set());
