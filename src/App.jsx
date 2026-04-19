@@ -218,10 +218,14 @@ const fmtDT = (iso) => {
   return `${fmtD(iso)} ${time}`;
 };
 
+function toLocalISO(d) {
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d - off).toISOString().slice(0, 16);
+}
 function defaultPickup() {
   const d = new Date(Date.now() + 45 * 60000);
   d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-  return d.toISOString().slice(0, 16);
+  return toLocalISO(d);
 }
 function minsUntil(iso) { return Math.floor((new Date(iso) - Date.now()) / 60000); }
 
@@ -581,13 +585,13 @@ function PickupPicker({ value, onChange, color }) {
   return (
     <div style={{ marginBottom:14 }}>
       <div style={{ color:T.text2,fontSize:10,letterSpacing:2,marginBottom:6,fontWeight:700 }}>PRÊTE POUR QUELLE HEURE ? *</div>
-      <input type="datetime-local" value={value} onChange={e=>onChange(e.target.value)} min={new Date().toISOString().slice(0,16)}
+      <input type="datetime-local" value={value} onChange={e=>onChange(e.target.value)} min={toLocalISO(new Date())}
         style={{ width:"100%",background:T.bg3,border:`2px solid ${color}55`,borderRadius:9,padding:"12px 14px",color:T.text,fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"Georgia,serif",colorScheme:"light" }} />
       <div style={{ fontSize:12,color:labelColor,marginTop:6,fontWeight:700 }}>{label}</div>
       <div style={{ display:"flex",gap:6,marginTop:8,flexWrap:"wrap" }}>
         {[15,30,45,60,90,120].map(m => {
           const d = new Date(Date.now() + m*60000); d.setSeconds(0,0);
-          const v = d.toISOString().slice(0,16);
+          const v = toLocalISO(d);
           return <button key={m} onClick={()=>onChange(v)} style={{ padding:"5px 10px",borderRadius:20,border:`1px solid ${color}55`,background:value===v?color:"transparent",color:value===v?"#fff":T.text2,cursor:"pointer",fontSize:11,fontWeight:700 }}>+{m>=60?`${m/60}h`:`${m}min`}</button>;
         })}
       </div>
