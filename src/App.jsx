@@ -218,12 +218,18 @@ const fmtDT = (iso) => {
   return `${fmtD(iso)} ${time}`;
 };
 
+function toLocalISO(d) {
+  const off = d.getTimezoneOffset() * 60000;
+  return new Date(d - off).toISOString().slice(0, 16);
+}
 function defaultPickup() {
   const d = new Date(Date.now() + 45 * 60000);
   d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-  return d.toISOString().slice(0, 16);
+  return toLocalISO(d);
 }
-function minsUntil(iso) { return Math.floor((new Date(iso) - Date.now()) / 60000); }
+function minsUntil(iso) {
+  return Math.floor((new Date(iso) - Date.now()) / 60000);
+}
 
 const SC = {
   scheduled: { label: "Programmée", color: "#7c3aed", bg: "#EDE0FF", icon: "🕐", next: "pending"   },
