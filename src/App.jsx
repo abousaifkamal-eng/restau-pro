@@ -338,7 +338,52 @@ function useOrderAlert(db, session) {
 
   return { alertOrder, dismissAlert };
 }
+js// ── SCHEDULED ALERTS HOOK ────────────────────────────────────────────────────
+function useScheduledAlerts(db, session, mutate) {
+  const [alert30, setAlert30] = useState(null);
+  const dismissedRef = useRef(new Set());
 
+  useEffect(() => {
+    if (!session || session.type === 'super' || !db) return;
+    const { restaurant: r } = session;
+
+    const check = () => {
+      const scheduled = (db.orders || []).filter(o =>
+        o.rId === r.id &&
+        o.status === 'scheduled' &&
+        !dismissedRef.current.has(o.id)
+      );
+      const soon = scheduled.find(o => {
+        const mins = minsUntil(o.pickupAt);
+        return mins <= 30 && mins > 0;
+      });
+      if (soon) {
+        setAlert30(soon);
+        mutate(d => {
+          const x = d.orders.find(i => i.id === soon.id);
+          if (x && x.status === 'scheduled') x.status = 'pending';
+          return d;
+        });
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 60000);
+    return () => clearInterval(interval);
+  }, [db, session, mutate]);
+
+  const dismissAlert = () => {
+    if (alert30) {
+      dismissedRef.current.add(alert30.id);
+      setAlert30(null);
+    }
+  };
+
+  return { alert30, dismissAlert };
+}
+
+// ── ORDER ALERT BANNER ────────────────────────────────────────────────────────
+function OrderAlertBanner({ order, onAccept }) {
 // ── ORDER ALERT BANNER ────────────────────────────────────────────────────────
 function OrderAlertBanner({ order, onAccept }) {
   return (
