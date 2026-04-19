@@ -218,18 +218,12 @@ const fmtDT = (iso) => {
   return `${fmtD(iso)} ${time}`;
 };
 
-function toLocalISO(d) {
-  const off = d.getTimezoneOffset() * 60000;
-  return new Date(d - off).toISOString().slice(0, 16);
-}
 function defaultPickup() {
   const d = new Date(Date.now() + 45 * 60000);
   d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-  return toLocalISO(d);
+  return d.toISOString().slice(0, 16);
 }
-function minsUntil(iso) {
-  return Math.floor((new Date(iso) - Date.now()) / 60000);
-}
+function minsUntil(iso) { return Math.floor((new Date(iso) - Date.now()) / 60000); }
 
 const SC = {
   scheduled: { label: "Programmée", color: "#7c3aed", bg: "#EDE0FF", icon: "🕐", next: "pending"   },
@@ -587,13 +581,13 @@ function PickupPicker({ value, onChange, color }) {
   return (
     <div style={{ marginBottom:14 }}>
       <div style={{ color:T.text2,fontSize:10,letterSpacing:2,marginBottom:6,fontWeight:700 }}>PRÊTE POUR QUELLE HEURE ? *</div>
-      <input type="datetime-local" value={value} onChange={e=>onChange(e.target.value)} min={toLocalISO(new Date())}
+      <input type="datetime-local" value={value} onChange={e=>onChange(e.target.value)} min={new Date().toISOString().slice(0,16)}
         style={{ width:"100%",background:T.bg3,border:`2px solid ${color}55`,borderRadius:9,padding:"12px 14px",color:T.text,fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"Georgia,serif",colorScheme:"light" }} />
       <div style={{ fontSize:12,color:labelColor,marginTop:6,fontWeight:700 }}>{label}</div>
       <div style={{ display:"flex",gap:6,marginTop:8,flexWrap:"wrap" }}>
         {[15,30,45,60,90,120].map(m => {
           const d = new Date(Date.now() + m*60000); d.setSeconds(0,0);
-          const v = toLocalISO(d);
+          const v = d.toISOString().slice(0,16);
           return <button key={m} onClick={()=>onChange(v)} style={{ padding:"5px 10px",borderRadius:20,border:`1px solid ${color}55`,background:value===v?color:"transparent",color:value===v?"#fff":T.text2,cursor:"pointer",fontSize:11,fontWeight:700 }}>+{m>=60?`${m/60}h`:`${m}min`}</button>;
         })}
       </div>
@@ -675,7 +669,7 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
   ];
   const reservations = (db.reservations||[]).filter(rv => rv.rId===r.id);
 
-  return ({tab==="call" && <ManagerCallTab db={db} mutate={mutate} session={session} />}
+  return (
     <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
       {tab==="call" && !calling && (
         <div style={{ textAlign:"center",paddingTop:36 }}>
@@ -820,22 +814,156 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
 
 // ── CHEF APP ──────────────────────────────────────────────────────────────────
 function ChefApp({ db, mutate, session, onLogout, syncing }) {
-  const [tab, setTab] = useState("orders");
+  const [tab, setTab] = useState("call");
+  const [calling, setCalling] = useState(false);
+  const [step, setStep] = useState("info");
+  const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [orderType, setOrderType] = useState("phone");
+  const [cart, setCart] = useState([]);
+  const [catFilter, setCatFilter] = useState("Tous");
+  const [pickupAt, setPickupAt] = useState(defaultPickup);
   const { restaurant:r, user } = session;
   const orders = (db.orders||[]).filter(o => o.rId===r.id && ["pending","preparing","ready","scheduled"].includes(o.status));
   const needs  = (db.needs||[]).filter(n => n.rId===r.id);
+  const menu   = db.menus?.[r.id] || [];
   const scheduled = orders.filter(o => o.status==="scheduled");
   const reservations = (db.reservations||[]).filter(rv => rv.rId===r.id);
 
+  const addToCart = (item) => setCart(p => { const ex = p.find(x => x.mid===item.id); return ex ? p.map(x=>x.mid===item.id?{...x,qty:x.qty+1}:x) : [...p,{mid:item.id,name:item.name,price:item.price,qty:1,emoji:item.emoji,img:item.img||null}]; });
+  const handleVoiceChef = useCallback((text) => {
+    const lower = text.toLowerCase();
+    menu.forEach(item => { if (lower.includes(item.name.toLowerCase())) addToCart(item); });
+    const nm = text.match(/(?:pour|client|monsieur|madame)\s+([A-Za-zÀ-ɏ]+(?:\s+[A-Za-zÀ-ɏ]+)?)/i);
+    if (nm) setClientName(nm[1].charAt(0).toUpperCase() + nm[1].slice(1));
+  }, [menu]);
+  const voiceChef = useVoice(handleVoiceChef);
+  const resetChefForm = () => { setCart([]); setClientName(""); setClientPhone(""); setCalling(false); setStep("info"); setPickupAt(defaultPickup()); };
+
+  const submitChefOrder = () => {
+    if (!clientName || !cart.length || !pickupAt) return;
+    const mins = minsUntil(pickupAt);
+    const status = mins > 30 ? "scheduled" : "pending";
+    const prepMin = Math.min(Math.max(...cart.map(c=>(menu.find(m=>m.id===c.mid)?.prep||15))),45);
+    const order = { id:uid(), rId:r.id, client:clientName, phone:clientPhone, type:orderType, items:cart, total:cart.reduce((s,c)=>s+c.price*c.qty,0), prepMin, status, pickupAt, createdAt:ts(), by:user.name };
+    mutate(d=>{ d.orders.push(order); return d; }, { type:"order", data:order });
+    resetChefForm(); setTab("orders");
+  };
+
+  const cats = ["Tous", ...new Set(menu.map(m=>m.cat))];
+  const menuItems = catFilter==="Tous" ? menu : menu.filter(m=>m.cat===catFilter);
+
   const tabs = [
-    { id:"orders", icon:"📋", label:"Commandes",   badge:orders.filter(o=>!["paid","scheduled"].includes(o.status)).length },
-    { id:"sched",  icon:"🕐", label:"Programmées", badge:scheduled.length },
-    { id:"needs",  icon:"🛒", label:"Besoins",     badge:needs.filter(n=>!n.done).length },
-    { id:"res",    icon:"🪑", label:"Réserv.",      badge:reservations.filter(rv=>!rv.done&&new Date(rv.date)>=new Date()).length },
+    { id:"call",   icon:"📞", label:"Appel",        badge:0 },
+    { id:"orders", icon:"📋", label:"Commandes",    badge:orders.filter(o=>!["paid","scheduled"].includes(o.status)).length },
+    { id:"sched",  icon:"🕐", label:"Programmées",  badge:scheduled.length },
+    { id:"needs",  icon:"🛒", label:"Besoins",      badge:needs.filter(n=>!n.done).length },
+    { id:"res",    icon:"🪑", label:"Réserv.",       badge:reservations.filter(rv=>!rv.done&&new Date(rv.date)>=new Date()).length },
   ];
 
   return (
     <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
+      {tab==="call" && !calling && (
+        <div style={{ textAlign:"center",paddingTop:60,minHeight:"60vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center" }}>
+          <div style={{ color:T.text3,fontSize:10,letterSpacing:3,marginBottom:36 }}>CUISINIER · PRISE DE COMMANDE</div>
+          <div style={{ position:"relative",display:"inline-block",marginBottom:44 }}>
+            <div style={{ position:"absolute",inset:-18,borderRadius:"50%",background:"#16a34a18",animation:"ring1 2s ease-out infinite" }} />
+            <button onClick={()=>setCalling(true)} style={{ position:"relative",width:160,height:160,borderRadius:"50%",border:"none",background:"linear-gradient(145deg,#16a34a,#15803d)",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,boxShadow:"0 8px 30px rgba(22,163,74,.4)" }}>
+              <span style={{ fontSize:58 }}>📞</span>
+              <span style={{ color:"#fff",fontWeight:900,fontSize:12,letterSpacing:3 }}>APPEL</span>
+            </button>
+          </div>
+          <style>{`@keyframes ring1{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.7);opacity:0}}`}</style>
+        </div>
+      )}
+
+      {tab==="call" && calling && (
+        <div>
+          <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14 }}>
+            <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+              <span style={{ width:8,height:8,borderRadius:"50%",background:"#16a34a",display:"inline-block",animation:"blink 1s infinite" }} />
+              <span style={{ color:"#16a34a",fontWeight:900,fontSize:12,letterSpacing:2 }}>APPEL EN COURS</span>
+            </div>
+            <button onClick={resetChefForm} style={{ background:"#fef2f2",border:"1px solid #fca5a5",borderRadius:8,padding:"6px 12px",color:"#dc2626",cursor:"pointer",fontSize:12 }}>✕ Raccrocher</button>
+          </div>
+          <div style={{ display:"flex",gap:4,marginBottom:16 }}>
+            {[["info","1.Client"],["items","2.Articles"],["time","3.Heure"],["confirm","4.Confirmer"]].map(([id,lb])=>(
+              <button key={id} onClick={()=>setStep(id)} style={{ flex:1,padding:"8px 2px",borderRadius:8,border:`1px solid ${T.border}`,background:step===id?r.color:T.card,color:step===id?"#fff":T.text2,cursor:"pointer",fontWeight:800,fontSize:10 }}>{lb}</button>
+            ))}
+          </div>
+          {step==="info" && (
+            <Pane color={r.color} title="CLIENT">
+              <FInp label="NOM DU CLIENT *" val={clientName} set={setClientName} icon="👤" />
+              <FInp label="TELEPHONE" val={clientPhone} set={setClientPhone} icon="📱" />
+              <div style={{ display:"flex",gap:6,marginBottom:14 }}>
+                {[["phone","Tel"],["dine-in","Place"],["takeaway","Emporter"]].map(([v,lb])=>(
+                  <button key={v} onClick={()=>setOrderType(v)} style={{ flex:1,padding:"9px 4px",borderRadius:8,border:`2px solid ${orderType===v?r.color:T.border}`,background:orderType===v?`${r.color}18`:T.card,color:orderType===v?r.color:T.text2,cursor:"pointer",fontWeight:700,fontSize:11 }}>{lb}</button>
+                ))}
+              </div>
+              <BigBtn color={r.color} onClick={()=>setStep("items")} disabled={!clientName}>Articles →</BigBtn>
+            </Pane>
+          )}
+          {step==="items" && (
+            <div>
+              <Pane color={r.color} title="MENU">
+                <div style={{ display:"flex",gap:5,flexWrap:"wrap",marginBottom:12 }}>
+                  {cats.map(c=><button key={c} onClick={()=>setCatFilter(c)} style={{ padding:"5px 11px",borderRadius:20,border:`1px solid ${catFilter===c?r.color:T.border}`,background:catFilter===c?r.color:T.card,color:catFilter===c?"#fff":T.text2,cursor:"pointer",fontSize:11,fontWeight:700 }}>{c}</button>)}
+                </div>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8 }}>
+                  {menuItems.map(item=>(
+                    <button key={item.id} onClick={()=>addToCart(item)} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:0,cursor:"pointer",textAlign:"center",overflow:"hidden",boxShadow:`0 1px 4px ${T.shadow}` }}
+                      onMouseOver={e=>{e.currentTarget.style.borderColor=r.color;}} onMouseOut={e=>{e.currentTarget.style.borderColor=T.border;}}>
+                      {item.img ? <img src={item.img} alt={item.name} style={{ width:"100%",height:75,objectFit:"cover",display:"block" }} onError={e=>e.target.style.display="none"} /> : <div style={{ fontSize:26,padding:"10px 0" }}>{item.emoji}</div>}
+                      <div style={{ padding:"5px 4px" }}>
+                        <div style={{ fontSize:10,fontWeight:700,color:T.text }}>{item.name}</div>
+                        <div style={{ color:r.color,fontSize:12,fontWeight:900 }}>{item.price.toFixed(2)}€</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </Pane>
+              {cart.length > 0 && (
+                <Pane color={r.color} title={`PANIER (${cart.length})`}>
+                  {cart.map(c=>(
+                    <div key={c.mid} style={{ display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${T.border}` }}>
+                      <span style={{ fontSize:18 }}>{c.emoji}</span>
+                      <span style={{ flex:1,fontSize:13,color:T.text }}>{c.name}</span>
+                      <QB onClick={()=>setCart(p=>{const e=p.find(x=>x.mid===c.mid);return e.qty>1?p.map(x=>x.mid===c.mid?{...x,qty:x.qty-1}:x):p.filter(x=>x.mid!==c.mid)})}>−</QB>
+                      <span style={{ width:22,textAlign:"center",fontWeight:800,color:T.text }}>{c.qty}</span>
+                      <QB onClick={()=>setCart(p=>p.map(x=>x.mid===c.mid?{...x,qty:x.qty+1}:x))}>+</QB>
+                      <span style={{ color:r.color,fontWeight:700,width:52,textAlign:"right",fontSize:13 }}>{(c.price*c.qty).toFixed(2)}€</span>
+                    </div>
+                  ))}
+                  <BigBtn color={r.color} onClick={()=>setStep("time")} style={{ marginTop:12 }}>Heure →</BigBtn>
+                </Pane>
+              )}
+              <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
+            </div>
+          )}
+          {step==="time" && (
+            <Pane color="#7c3aed" title="HEURE DE RETRAIT">
+              <PickupPicker value={pickupAt} onChange={setPickupAt} color="#7c3aed" />
+              <BigBtn color="#7c3aed" onClick={()=>setStep("confirm")} disabled={!pickupAt||minsUntil(pickupAt)<0}>Confirmer →</BigBtn>
+            </Pane>
+          )}
+          {step==="confirm" && (
+            <Pane color="#16a34a" title="RECAPITULATIF">
+              <div style={{ background:"#f0fdf4",borderRadius:10,padding:14,marginBottom:14,border:"1px solid #bbf7d0" }}>
+                <RR l="Client" v={clientName} c={T.text} bold />
+                <RR l="Type" v={{phone:"Tel","dine-in":"Sur place",takeaway:"Emporter"}[orderType]} c={T.text} />
+                <RR l="Prête pour" v={fmtDT(pickupAt)} c="#7c3aed" bold />
+                <div style={{ borderTop:`1px solid ${T.border}`,margin:"10px 0" }} />
+                {cart.map(c=><RR key={c.mid} l={`${c.emoji} ${c.name} ×${c.qty}`} v={`${(c.price*c.qty).toFixed(2)}€`} c={r.color} />)}
+                <div style={{ borderTop:`1px solid ${T.border}`,margin:"10px 0" }} />
+                <RR l="TOTAL" v={`${cart.reduce((s,c)=>s+c.price*c.qty,0).toFixed(2)}€`} c="#16a34a" bold />
+              </div>
+              <button onClick={submitChefOrder} style={{ width:"100%",background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:14,padding:16,fontSize:15,fontWeight:900,color:"#fff",cursor:"pointer",letterSpacing:2,boxShadow:"0 4px 15px rgba(22,163,74,.3)" }}>
+                VALIDER LA COMMANDE
+              </button>
+            </Pane>
+          )}
+        </div>
+      )}
       {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="chef" mutate={mutate} userName={user.name} />}
       {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
       {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager db={db} />}
