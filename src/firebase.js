@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "firebase/firestore";
+import { getMessaging, getToken, onMessage } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBMOYHEHuM3TQ5mTRIRTU0vUQqtShA8JnY",
@@ -13,6 +14,46 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+
+let messaging = null;
+try {
+  messaging = getMessaging(app);
+} catch(e) {
+  console.warn("Messaging not supported:", e);
+}
+
+const VAPID_KEY = "BEl62iUYgUivxIkv69yViEuiBIa40HI80NM9LdBpUR_FNiNKAtmW7w-EyKd1PZlVU_rX6HJcKYFV2xWGHJo";
+
+export async function requestNotificationPermission() {
+  if (!messaging) return null;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return null;
+    if ('serviceWorker' in navigator) {
+      await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    }
+    const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+    return token;
+  } catch(e) {
+    console.warn("Notification permission error:", e);
+    return null;
+  }
+}
+
+export async function saveFCMToken(userId, token) {
+  if (!token) return;
+  try {
+    const ref = doc(db, "fcm-tokens", userId);
+    await setDoc(ref, { token, updatedAt: Date.now() }, { merge: true });
+  } catch(e) {
+    console.warn("Save FCM token error:", e);
+  }
+}
+
+export function onForegroundMessage(callback) {
+  if (!messaging) return () => {};
+  return onMessage(messaging, callback);
+}
 
 export async function loadFromFirestore() {
   try {
