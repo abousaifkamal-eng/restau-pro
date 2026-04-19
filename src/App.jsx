@@ -243,6 +243,124 @@ function useVoice(onResult) {
   const stop = useCallback(() => { try { ref.current?.stop(); } catch {} setActive(false); }, []);
   return { active, transcript, start, stop, supported };
 }
+// ── ORDER ALERT HOOK ─────────────────────────────────────────────────────────
+function useOrderAlert(db, session) {
+  const [alertOrder, setAlertOrder] = useState(null);
+  const [dismissed, setDismissed] = useState(new Set());
+  const intervalRef = useRef(null);
+  const lastOrderCount = useRef(0);
+
+  const playAlert = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const sequence = [
+        { freq: 880, delay: 0,    dur: 0.15 },
+        { freq: 660, delay: 0.2,  dur: 0.15 },
+        { freq: 880, delay: 0.4,  dur: 0.15 },
+        { freq: 1100,delay: 0.6,  dur: 0.25 },
+      ];
+      sequence.forEach(({ freq, delay, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + dur + 0.05);
+      });
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!session || session.type === 'super') return;
+    const { restaurant: r, user } = session;
+    const orders = (db.orders || []).filter(o =>
+      o.rId === r.id &&
+      o.status === 'pending' &&
+      o.by !== user.name &&
+      !dismissed.has(o.id)
+    );
+
+    if (orders.length > 0) {
+      const newest = orders.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+      setAlertOrder(newest);
+
+      // Start repeating alert every 8 seconds
+      if (!intervalRef.current) {
+        playAlert();
+        intervalRef.current = setInterval(() => {
+          playAlert();
+        }, 8000);
+      }
+    } else {
+      setAlertOrder(null);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    return () => {};
+  }, [db, session, dismissed, playAlert]);
+
+  const dismissAlert = useCallback((orderId) => {
+    setDismissed(prev => new Set([...prev, orderId]));
+    setAlertOrder(null);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  return { alertOrder, dismissAlert };
+}
+
+// ── ORDER ALERT BANNER ────────────────────────────────────────────────────────
+function OrderAlertBanner({ order, onAccept, color }) {
+  const [pulse, setPulse] = useState(true);
+  useEffect(() => {
+    const t = setInterval(() => setPulse(p => !p), 600);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div style={{
+      position:"fixed", top:0, left:0, right:0, zIndex:10001,
+      background:`linear-gradient(135deg, #7c2d12, #dc2626)`,
+      padding:"14px 16px",
+      display:"flex", alignItems:"center", gap:12,
+      boxShadow:"0 4px 40px rgba(220,38,38,.8)",
+      animation:"slideD .35s cubic-bezier(.34,1.56,.64,1)"
+    }}>
+      <span style={{ fontSize:36, animation: pulse ? "none" : "none" }}>🔔</span>
+      <div style={{ flex:1 }}>
+        <div style={{ fontWeight:900, fontSize:15, color:"#fff" }}>
+          🆕 NOUVELLE COMMANDE — {order.client}
+        </div>
+        <div style={{ color:"rgba(255,255,255,.85)", fontSize:12, marginTop:2 }}>
+          {order.items?.length} article(s) · {order.total?.toFixed(2)}€ · par {order.by}
+        </div>
+      </div>
+      <button onClick={() => onAccept(order.id)}
+        style={{
+          background:"#fff", border:"none", borderRadius:10,
+          padding:"10px 18px", color:"#dc2626",
+          fontWeight:900, fontSize:13, cursor:"pointer",
+          boxShadow:"0 2px 10px rgba(0,0,0,.3)",
+          flexShrink:0
+        }}>
+        ✅ Accepter
+      </button>
+      <style>{`
+        @keyframes slideD{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+      `}</style>
+    </div>
+  );
+}
+
+
 
 // ── VOICE INPUT WIDGET ────────────────────────────────────────────────────────
 function VoiceInput({ onSubmit, placeholder = "Tapez ici...", buttonLabel = "Envoyer" }) {
@@ -399,14 +517,33 @@ export default function App() {
   }, [scheduleSave]);
 
   const { alert30, dismissAlert } = useScheduledAlerts(db || INITIAL_DB, session, mutate);
+  const { alertOrder, dismissAlert: dismissOrderAlert } = useOrderAlert(db || INITIAL_DB, session);
 
   // Loading screen
   if (!db) return (
-    <div style={{ minHeight:"100vh", background:"#060606", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", color:"#fff" }}>
-      <div style={{ fontSize:64, marginBottom:20, animation:"spin 1s linear infinite" }}>🍽️</div>
-      <div style={{ color:"#D4A017", fontSize:16, letterSpacing:3 }}>CHARGEMENT...</div>
-      <div style={{ color:"#444", fontSize:12, marginTop:8 }}>Connexion à la base de données</div>
-      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+    <div style={{ minHeight:"100vh", background:"#060606", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", color:"#fff", position:"relative", overflow:"hidden" }}>
+      <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at center, #1a0800 0%, #060606 70%)" }} />
+      <div style={{ position:"relative", textAlign:"center" }}>
+        <img src="https://i.imgur.com/hAaiZjt.png" alt="KamEat"
+          style={{ width:220, height:220, objectFit:"contain", marginBottom:8, animation:"fadeIn 0.8s ease, pulse 2s ease-in-out infinite" }}
+          onError={e=>{ e.target.style.display="none"; }} />
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:6 }}>
+          <div style={{ width:40, height:1, background:"#D4A017", opacity:0.6 }} />
+          <div style={{ width:6, height:6, borderRadius:"50%", background:"#D4A017" }} />
+          <div style={{ width:40, height:1, background:"#D4A017", opacity:0.6 }} />
+        </div>
+        <div style={{ color:"#C9920A", fontSize:11, letterSpacing:6, marginBottom:28, opacity:0.8 }}>GESTION RESTAURANT</div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, justifyContent:"center" }}>
+          <div style={{ width:28, height:2, borderRadius:1, background:"#D4A017", animation:"loading 1.5s ease-in-out infinite" }} />
+          <div style={{ color:"#888", fontSize:12, letterSpacing:2 }}>CHARGEMENT</div>
+          <div style={{ width:28, height:2, borderRadius:1, background:"#D4A017", animation:"loading 1.5s ease-in-out infinite 0.3s" }} />
+        </div>
+      </div>
+      <style>{`
+        @keyframes fadeIn { from{opacity:0;transform:scale(0.85)} to{opacity:1;transform:scale(1)} }
+        @keyframes pulse { 0%,100%{filter:drop-shadow(0 0 8px #D4A01744)} 50%{filter:drop-shadow(0 0 22px #D4A01799)} }
+        @keyframes loading { 0%,100%{opacity:0.3;transform:scaleX(0.6)} 50%{opacity:1;transform:scaleX(1)} }
+      `}</style>
     </div>
   );
 
@@ -416,8 +553,9 @@ export default function App() {
   return (
     <div>
       {flash && <FlashBanner flash={flash} onClose={() => setFlash(null)} />}
+      {alertOrder && <OrderAlertBanner order={alertOrder} onAccept={dismissOrderAlert} color="#dc2626" />}
       {alert30 && <Alert30Banner order={alert30} onClose={dismissAlert} />}
-      <div style={{ paddingTop: (flash || alert30) ? 72 : 0 }}>
+      <div style={{ paddingTop: (flash || alert30 || alertOrder) ? 72 : 0 }}>
         {session.type === "super"        ? <SuperAdmin  {...props} /> :
          session.user.role === "manager" ? <ManagerApp  {...props} /> :
          session.user.role === "chef"    ? <ChefApp     {...props} /> :
@@ -489,8 +627,8 @@ function LoginScreen({ db, onLogin }) {
     <div style={{ minHeight:"100vh",background:"#060606",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"Georgia,serif" }}>
       <div style={{ textAlign:"center",marginBottom:36 }}>
         <div style={{ fontSize:64 }}>🍽️</div>
-        <h1 style={{ margin:"8px 0 4px",fontSize:30,fontWeight:900,color:"#fff",letterSpacing:5 }}>RESTAU<span style={{ color:"#D4A017" }}>PRO</span></h1>
-        <div style={{ color:"#333",fontSize:10,letterSpacing:4 }}>GESTION EN TEMPS RÉEL</div>
+        <h1 style={{ margin:"8px 0 4px",fontSize:30,fontWeight:900,color:"#fff",letterSpacing:5 }}>Kam<span style={{ color:"#D4A017" }}>Eat</span></h1>
+        <div style={{ color:"#333",fontSize:10,letterSpacing:4 }}>GESTION RESTAURANT</div>
       </div>
       <div style={{ width:"100%",maxWidth:380,background:"#0f0f0f",borderRadius:20,border:"1px solid #1e1e1e",padding:26,boxShadow:"0 30px 80px rgba(0,0,0,.9)" }}>
         <Lbl style={{ textAlign:"center",marginBottom:20 }}>CONNEXION</Lbl>
@@ -1620,7 +1758,7 @@ function SuperAdmin({ db, mutate, onLogout, syncing }) {
     <div style={{ minHeight:"100vh",background:"#060606",fontFamily:"Georgia,serif",color:"#fff" }}>
       <header style={{ background:"linear-gradient(135deg,#0d0d0d,#1a1a2e)",borderBottom:"1px solid #1e1e2e",padding:"12px 16px",display:"flex",alignItems:"center",gap:12 }}>
         <span style={{ fontSize:34 }}>👑</span>
-        <div style={{ flex:1 }}><div style={{ fontWeight:900,letterSpacing:2,fontSize:14 }}>SUPER ADMINISTRATEUR</div><div style={{ color:"#444",fontSize:11 }}>RestauPro · Toutes les données en temps réel ✅</div></div>
+        <div style={{ flex:1 }}><div style={{ fontWeight:900,letterSpacing:2,fontSize:14 }}>SUPER ADMINISTRATEUR</div><div style={{ color:"#444",fontSize:11 }}>KamEat · Toutes les données en temps réel ✅</div></div>
         {syncing && <span style={{ color:"#555",fontSize:11,animation:"pulse 1s infinite" }}>⏳</span>}
         <button onClick={onLogout} style={{ background:"#111",border:"1px solid #222",borderRadius:8,padding:"6px 10px",color:"#666",cursor:"pointer" }}>🚪</button>
       </header>
