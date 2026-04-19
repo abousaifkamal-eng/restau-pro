@@ -675,7 +675,7 @@ function ManagerApp({ db, mutate, session, onLogout, syncing }) {
   ];
   const reservations = (db.reservations||[]).filter(rv => rv.rId===r.id);
 
-  return (
+  return ({tab==="call" && <ManagerCallTab db={db} mutate={mutate} session={session} />}
     <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
       {tab==="call" && !calling && (
         <div style={{ textAlign:"center",paddingTop:36 }}>
