@@ -246,52 +246,71 @@ function useVoice(onResult) {
 // ── ORDER ALERT HOOK ─────────────────────────────────────────────────────────
 function useOrderAlert(db, session) {
   const [alertOrder, setAlertOrder] = useState(null);
-  const [dismissed, setDismissed] = useState(new Set());
+  const dismissedRef = useRef(new Set());
   const intervalRef = useRef(null);
-  const lastOrderCount = useRef(0);
+  const seenOrdersRef = useRef(new Set());
 
   const playAlert = useCallback(() => {
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const sequence = [
-        { freq: 880, delay: 0,    dur: 0.15 },
-        { freq: 660, delay: 0.2,  dur: 0.15 },
-        { freq: 880, delay: 0.4,  dur: 0.15 },
-        { freq: 1100,delay: 0.6,  dur: 0.25 },
-      ];
-      sequence.forEach(({ freq, delay, dur }) => {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      // Belle mélodie d'alerte 4 notes
+      [[880,0],[660,0.25],[880,0.5],[1100,0.75]].forEach(([freq, delay]) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
         osc.type = 'sine';
-        gain.gain.setValueAtTime(0.4, ctx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + dur);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.45, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
         osc.start(ctx.currentTime + delay);
-        osc.stop(ctx.currentTime + delay + dur + 0.05);
+        osc.stop(ctx.currentTime + delay + 0.35);
       });
-    } catch {}
+    } catch(e) { console.log('Audio error:', e); }
   }, []);
 
   useEffect(() => {
-    if (!session || session.type === 'super') return;
+    if (!session || session.type === 'super' || !db) return;
     const { restaurant: r, user } = session;
+    
     const orders = (db.orders || []).filter(o =>
       o.rId === r.id &&
       o.status === 'pending' &&
       o.by !== user.name &&
-      !dismissed.has(o.id)
+      !dismissedRef.current.has(o.id)
     );
 
-    if (orders.length > 0) {
-      const newest = orders.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-      setAlertOrder(newest);
-
-      // Start repeating alert every 8 seconds
-      if (!intervalRef.current) {
+    // Detect NEW orders (not seen before)
+    orders.forEach(o => {
+      if (!seenOrdersRef.current.has(o.id)) {
+        seenOrdersRef.current.add(o.id);
+        // New order! trigger alert immediately
         playAlert();
+      }
+    });
+
+    if (orders.length > 0) {
+      const newest = [...orders].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+      setAlertOrder(newest);
+      
+      // Repeat sound every 8 seconds until dismissed
+      if (!intervalRef.current) {
         intervalRef.current = setInterval(() => {
-          playAlert();
+          const stillPending = (db.orders || []).filter(o =>
+            o.rId === r.id &&
+            o.status === 'pending' &&
+            o.by !== user.name &&
+            !dismissedRef.current.has(o.id)
+          );
+          if (stillPending.length > 0) {
+            playAlert();
+          } else {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+            setAlertOrder(null);
+          }
         }, 8000);
       }
     } else {
@@ -303,10 +322,10 @@ function useOrderAlert(db, session) {
     }
 
     return () => {};
-  }, [db, session, dismissed, playAlert]);
+  }, [db, session, playAlert]);
 
   const dismissAlert = useCallback((orderId) => {
-    setDismissed(prev => new Set([...prev, orderId]));
+    dismissedRef.current.add(orderId);
     setAlertOrder(null);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -318,132 +337,42 @@ function useOrderAlert(db, session) {
 }
 
 // ── ORDER ALERT BANNER ────────────────────────────────────────────────────────
-function OrderAlertBanner({ order, onAccept, color }) {
-  const [pulse, setPulse] = useState(true);
-  useEffect(() => {
-    const t = setInterval(() => setPulse(p => !p), 600);
-    return () => clearInterval(t);
-  }, []);
-
+function OrderAlertBanner({ order, onAccept }) {
   return (
     <div style={{
       position:"fixed", top:0, left:0, right:0, zIndex:10001,
-      background:`linear-gradient(135deg, #7c2d12, #dc2626)`,
+      background:"linear-gradient(135deg,#991b1b,#dc2626,#ef4444)",
       padding:"14px 16px",
       display:"flex", alignItems:"center", gap:12,
-      boxShadow:"0 4px 40px rgba(220,38,38,.8)",
-      animation:"slideD .35s cubic-bezier(.34,1.56,.64,1)"
+      boxShadow:"0 4px 40px rgba(220,38,38,.9)",
+      animation:"slideD .3s cubic-bezier(.34,1.56,.64,1)"
     }}>
-      <span style={{ fontSize:36, animation: pulse ? "none" : "none" }}>🔔</span>
+      <div style={{ fontSize:36, animation:"ringBell .4s infinite alternate" }}>🔔</div>
       <div style={{ flex:1 }}>
-        <div style={{ fontWeight:900, fontSize:15, color:"#fff" }}>
-          🆕 NOUVELLE COMMANDE — {order.client}
+        <div style={{ fontWeight:900, fontSize:16, color:"#fff", letterSpacing:1 }}>
+          🆕 NOUVELLE COMMANDE !
         </div>
-        <div style={{ color:"rgba(255,255,255,.85)", fontSize:12, marginTop:2 }}>
-          {order.items?.length} article(s) · {order.total?.toFixed(2)}€ · par {order.by}
+        <div style={{ color:"rgba(255,255,255,.9)", fontSize:13, marginTop:2 }}>
+          <strong>{order.client}</strong> · {order.items?.length} article(s) · <strong>{order.total?.toFixed(2)}€</strong> · par {order.by}
         </div>
       </div>
       <button onClick={() => onAccept(order.id)}
         style={{
           background:"#fff", border:"none", borderRadius:10,
-          padding:"10px 18px", color:"#dc2626",
-          fontWeight:900, fontSize:13, cursor:"pointer",
-          boxShadow:"0 2px 10px rgba(0,0,0,.3)",
-          flexShrink:0
+          padding:"12px 20px", color:"#dc2626",
+          fontWeight:900, fontSize:14, cursor:"pointer",
+          boxShadow:"0 2px 12px rgba(0,0,0,.3)",
+          flexShrink:0, letterSpacing:1
         }}>
-        ✅ Accepter
+        ✅ VU
       </button>
       <style>{`
-        @keyframes slideD{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+        @keyframes ringBell{from{transform:rotate(-20deg)}to{transform:rotate(20deg)}}
       `}</style>
     </div>
   );
 }
 
-
-
-// ── VOICE INPUT WIDGET ────────────────────────────────────────────────────────
-function VoiceInput({ onSubmit, placeholder = "Tapez ici...", buttonLabel = "Envoyer" }) {
-  const [text, setText] = useState("");
-  const [mode, setMode] = useState("text");
-  const voice = useVoice(useCallback((t) => setText(t), []));
-  const submit = () => { if (!text.trim()) return; onSubmit(text.trim()); setText(""); setMode("text"); };
-  return (
-    <div>
-      <div style={{ display:"flex", gap:6, marginBottom:10 }}>
-        <ModeBtn active={mode==="text"} onClick={()=>setMode("text")}>⌨️ Clavier</ModeBtn>
-        <ModeBtn active={mode==="voice"} color="#3b82f6" onClick={()=>setMode("voice")}>
-          🎤 Micro {!voice.supported && <span style={{fontSize:9,opacity:.5}}>(Chrome)</span>}
-        </ModeBtn>
-      </div>
-      {mode === "voice" && (
-        <div style={{ textAlign:"center", marginBottom:12 }}>
-          {voice.supported ? (
-            <>
-              <button onClick={voice.active ? voice.stop : voice.start}
-                style={{ width:74,height:74,borderRadius:"50%",border:`3px solid ${voice.active?"#ef4444":"#3b82f6"}`,background:voice.active?"#ef444412":"#3b82f612",cursor:"pointer",fontSize:32,outline:"none",boxShadow:voice.active?"0 0 30px #ef444455":"0 0 18px #3b82f633",animation:voice.active?"voicePulse 1.2s infinite":"none" }}>
-                {voice.active ? "⏹" : "🎤"}
-              </button>
-              <p style={{ color:voice.active?"#ef4444":"#555", fontSize:12, marginTop:8 }}>
-                {voice.active ? "🔴 En écoute..." : "Appuyez pour parler"}
-              </p>
-              {voice.transcript && <div style={{ background:"#080f1a",border:"1px solid #3b82f633",borderRadius:8,padding:10,color:"#93c5fd",fontSize:13,fontStyle:"italic",margin:"8px 0" }}>"{voice.transcript}"</div>}
-            </>
-          ) : (
-            <div style={{ background:"#1a1500",border:"1px solid #f59e0b33",borderRadius:10,padding:14,color:"#f59e0b",fontSize:12 }}>
-              ⚠️ Micro disponible sur Chrome/Edge uniquement
-              <br/><button onClick={()=>setMode("text")} style={{ marginTop:8,background:"#f59e0b22",border:"1px solid #f59e0b44",borderRadius:6,padding:"5px 12px",color:"#f59e0b",cursor:"pointer",fontSize:12 }}>→ Utiliser le clavier</button>
-            </div>
-          )}
-        </div>
-      )}
-      <div style={{ display:"flex", gap:8 }}>
-        <input value={text} onChange={e=>setText(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder={placeholder}
-          style={{ flex:1,background:"#141414",border:"1px solid #2a2a2a",borderRadius:8,padding:"11px 13px",color:"#fff",fontSize:14,outline:"none",fontFamily:"Georgia,serif" }} />
-        <button onClick={submit} disabled={!text.trim()}
-          style={{ background:text.trim()?"linear-gradient(135deg,#D4A017,#b8860b)":"#1a1a1a",border:"none",borderRadius:8,padding:"0 16px",color:text.trim()?"#060606":"#444",cursor:text.trim()?"pointer":"not-allowed",fontWeight:900,fontSize:13,whiteSpace:"nowrap" }}>
-          {buttonLabel}
-        </button>
-      </div>
-      <style>{`@keyframes voicePulse{0%,100%{box-shadow:0 0 30px #ef444455}50%{box-shadow:0 0 50px #ef4444aa}}`}</style>
-    </div>
-  );
-}
-
-// ── SCHEDULED ALERT ───────────────────────────────────────────────────────────
-function useScheduledAlerts(db, session, mutate) {
-  const [alert30, setAlert30] = useState(null);
-  const alerted = useRef(new Set());
-  useEffect(() => {
-    if (!session || session.type === "super") return;
-    const { restaurant: r } = session;
-    const check = () => {
-      const orders = (db.orders||[]).filter(o => o.rId === r.id && o.status === "scheduled" && o.pickupAt);
-      orders.forEach(o => {
-        const mins = minsUntil(o.pickupAt);
-        if (mins <= 30 && mins > 0 && !alerted.current.has(o.id)) {
-          alerted.current.add(o.id);
-          setAlert30(o);
-          mutate(d => { const ord = d.orders.find(x => x.id === o.id); if (ord && ord.status === "scheduled") ord.status = "pending"; return d; },
-            { type: "alert30", data: o });
-          try {
-            const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            [0, 200, 400].forEach(delay => {
-              const osc = ctx.createOscillator(); const gain = ctx.createGain();
-              osc.connect(gain); gain.connect(ctx.destination);
-              osc.frequency.value = 880; gain.gain.value = 0.3;
-              osc.start(ctx.currentTime + delay/1000); osc.stop(ctx.currentTime + delay/1000 + 0.18);
-            });
-          } catch {}
-        }
-      });
-    };
-    check();
-    const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
-  }, [db, session, mutate]);
-  return { alert30, dismissAlert: () => setAlert30(null) };
-}
 
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
 export default function App() {
