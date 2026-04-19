@@ -437,7 +437,16 @@ export default function App() {
   const [flash, setFlash] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-
+// Notifications push
+useEffect(() => {
+  if (session && session.type !== 'super') {
+    import('./firebase.js').then(({ requestNotificationPermission, saveFCMToken }) => {
+      requestNotificationPermission().then(token => {
+        if (token) saveFCMToken(session.user.id, token);
+      });
+    });
+  }
+}, [session]);
   useEffect(() => {
     const unlock = () => {
       const ctx = getAudioCtx();
