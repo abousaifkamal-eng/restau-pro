@@ -164,7 +164,7 @@ const INITIAL_DB = {
   },
   orders: [],
   needs: [],
-  shoppingLists: [], // historique des listes validées
+  shoppingLists: [],
   reservations: [],
   inventory: {
     r1: [
@@ -243,7 +243,20 @@ function useVoice(onResult) {
   const stop = useCallback(() => { try { ref.current?.stop(); } catch {} setActive(false); }, []);
   return { active, transcript, start, stop, supported };
 }
-// ── ORDER ALERT HOOK ─────────────────────────────────────────────────────────
+
+// ── GLOBAL AUDIO CONTEXT ──────────────────────────────────────────────────────
+let globalAudioCtx = null;
+function getAudioCtx() {
+  if (!globalAudioCtx) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) globalAudioCtx = new AC();
+    } catch(e) {}
+  }
+  return globalAudioCtx;
+}
+
+// ── ORDER ALERT HOOK ──────────────────────────────────────────────────────────
 function useOrderAlert(db, session) {
   const [alertOrder, setAlertOrder] = useState(null);
   const dismissedRef = useRef(new Set());
@@ -252,10 +265,8 @@ function useOrderAlert(db, session) {
 
   const playAlert = useCallback(() => {
     try {
-      // Use global audio context (already unlocked by user interaction)
       let ctx = getAudioCtx();
       if (!ctx) return;
-      // Resume if suspended (mobile)
       const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
       resume.then(() => {
         [[880,0],[660,0.22],[880,0.44],[1100,0.66]].forEach(([freq, delay]) => {
@@ -277,7 +288,7 @@ function useOrderAlert(db, session) {
   useEffect(() => {
     if (!session || session.type === 'super' || !db) return;
     const { restaurant: r, user } = session;
-    
+
     const orders = (db.orders || []).filter(o =>
       o.rId === r.id &&
       o.status === 'pending' &&
@@ -285,11 +296,9 @@ function useOrderAlert(db, session) {
       !dismissedRef.current.has(o.id)
     );
 
-    // Detect NEW orders (not seen before)
     orders.forEach(o => {
       if (!seenOrdersRef.current.has(o.id)) {
         seenOrdersRef.current.add(o.id);
-        // New order! trigger alert immediately
         playAlert();
       }
     });
@@ -297,8 +306,7 @@ function useOrderAlert(db, session) {
     if (orders.length > 0) {
       const newest = [...orders].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
       setAlertOrder(newest);
-      
-      // Repeat sound every 8 seconds until dismissed
+
       if (!intervalRef.current) {
         intervalRef.current = setInterval(() => {
           const stillPending = (db.orders || []).filter(o =>
@@ -338,7 +346,8 @@ function useOrderAlert(db, session) {
 
   return { alertOrder, dismissAlert };
 }
-// ── SCHEDULED ALERTS HOOK ────────────────────────────────────────────────────
+
+// ── SCHEDULED ALERTS HOOK ─────────────────────────────────────────────────────
 function useScheduledAlerts(db, session, mutate) {
   const [alert30, setAlert30] = useState(null);
   const dismissedRef = useRef(new Set());
@@ -353,10 +362,12 @@ function useScheduledAlerts(db, session, mutate) {
         o.status === 'scheduled' &&
         !dismissedRef.current.has(o.id)
       );
+
       const soon = scheduled.find(o => {
         const mins = minsUntil(o.pickupAt);
         return mins <= 30 && mins > 0;
       });
+
       if (soon) {
         setAlert30(soon);
         mutate(d => {
@@ -382,8 +393,6 @@ function useScheduledAlerts(db, session, mutate) {
   return { alert30, dismissAlert };
 }
 
-// ── ORDER ALERT BANNER ────────────────────────────────────────────────────────
-function OrderAlertBanner({ order, onAccept }) {
 // ── ORDER ALERT BANNER ────────────────────────────────────────────────────────
 function OrderAlertBanner({ order, onAccept }) {
   return (
@@ -421,28 +430,14 @@ function OrderAlertBanner({ order, onAccept }) {
   );
 }
 
-
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
-// Global audio context that gets unlocked on first user interaction
-let globalAudioCtx = null;
-function getAudioCtx() {
-  if (!globalAudioCtx) {
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) globalAudioCtx = new AC();
-    } catch(e) {}
-  }
-  return globalAudioCtx;
-}
-
 export default function App() {
-  const [db, setDb] = useState(null); // null = loading
+  const [db, setDb] = useState(null);
   const [session, setSession] = useState(null);
   const [flash, setFlash] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
 
-  // Unlock audio on first touch/click (required for mobile)
   useEffect(() => {
     const unlock = () => {
       const ctx = getAudioCtx();
@@ -459,12 +454,12 @@ export default function App() {
       document.removeEventListener('click', unlock);
     };
   }, []);
+
   const flashTimer = useRef(null);
   const saveTimer = useRef(null);
   const localVersion = useRef(0);
   const remoteVersion = useRef(0);
 
-  // Load initial data from Firestore — NEVER overwrite existing Firebase data
   useEffect(() => {
     loadFromFirestore().then(data => {
       if (data) {
@@ -487,10 +482,8 @@ export default function App() {
     });
   }, []);
 
-  // Subscribe to real-time Firestore updates — ALWAYS apply remote changes
   useEffect(() => {
     const unsub = subscribeToFirestore((remoteDb, remoteTs) => {
-      // Only skip if we saved MORE recently than the remote update
       if (remoteTs && remoteTs <= localVersion.current) return;
       remoteVersion.current = remoteTs || 0;
       setDb(remoteDb);
@@ -498,7 +491,6 @@ export default function App() {
     return unsub;
   }, []);
 
-  // Debounced save to Firestore
   const scheduleSave = useCallback((data) => {
     clearTimeout(saveTimer.current);
     setSyncing(true);
@@ -527,7 +519,6 @@ export default function App() {
   const { alert30, dismissAlert } = useScheduledAlerts(db || INITIAL_DB, session, mutate);
   const { alertOrder, dismissAlert: dismissOrderAlert } = useOrderAlert(db || INITIAL_DB, session);
 
-  // Loading screen
   if (!db) return (
     <div style={{ minHeight:"100vh", background:"#060606", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", color:"#fff", position:"relative", overflow:"hidden" }}>
       <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at center, #1a0800 0%, #060606 70%)" }} />
@@ -620,9 +611,7 @@ function LoginScreen({ db, onLogin }) {
 
   const login = () => {
     setErr("");
-    // Super admin
     if (user === db.superAdmin.username && pass === db.superAdmin.password) { onLogin({ type:"super" }); return; }
-    // Find user across ALL restaurants — staff only sees their own restaurant
     const found = (db.users||[]).find(u => u.username === user && u.password === pass);
     if (found) {
       const rest = (db.restaurants||[]).find(r => r.id === found.rId);
@@ -708,6 +697,30 @@ function PickupPicker({ value, onChange, color }) {
           return <button key={m} onClick={()=>onChange(v)} style={{ padding:"5px 10px",borderRadius:20,border:`1px solid ${color}44`,background:value===v?`${color}33`:"transparent",color:value===v?color:"#666",cursor:"pointer",fontSize:11,fontWeight:700 }}>+{m>=60?`${m/60}h`:`${m}min`}</button>;
         })}
       </div>
+    </div>
+  );
+}
+
+// ── VOICE INPUT ───────────────────────────────────────────────────────────────
+function VoiceInput({ onSubmit, placeholder, buttonLabel }) {
+  const [text, setText] = useState("");
+  const handleVoice = useCallback((t) => setText(t), []);
+  const voice = useVoice(handleVoice);
+  return (
+    <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+      <input value={text} onChange={e=>setText(e.target.value)} placeholder={placeholder}
+        onKeyDown={e=>{ if(e.key==="Enter"&&text.trim()){onSubmit(text);setText("");} }}
+        style={{ flex:1,background:"#141414",border:"1px solid #222",borderRadius:9,padding:"11px 12px",color:"#fff",fontSize:14,outline:"none",fontFamily:"Georgia,serif" }} />
+      {voice.supported && (
+        <button onClick={voice.active?voice.stop:voice.start}
+          style={{ width:40,height:40,borderRadius:"50%",border:`2px solid ${voice.active?"#ef4444":"#3b82f6"}`,background:voice.active?"#ef444412":"#3b82f612",cursor:"pointer",fontSize:18,flexShrink:0 }}>
+          {voice.active?"⏹":"🎤"}
+        </button>
+      )}
+      <button onClick={()=>{ if(text.trim()){onSubmit(text);setText("");} }}
+        style={{ padding:"10px 16px",borderRadius:9,border:"none",background:"#3b82f6",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13,flexShrink:0 }}>
+        {buttonLabel}
+      </button>
     </div>
   );
 }
@@ -973,9 +986,9 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
     { id:"needs",  icon:"🛒", label:"Besoins",      badge:needs.filter(n=>!n.done).length },
     { id:"res",    icon:"🪑", label:"Réserv.",       badge:reservations.filter(rv=>!rv.done&&new Date(rv.date)>=new Date()).length },
   ];
-    return (
-    <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
 
+  return (
+    <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
       {tab==="call" && !calling && (
         <div style={{ textAlign:"center",paddingTop:60,minHeight:"60vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center" }}>
           <div style={{ color:"#555",fontSize:10,letterSpacing:3,marginBottom:36 }}>CUISINIER · PRISE DE COMMANDE</div>
@@ -1073,55 +1086,27 @@ function ChefApp({ db, mutate, session, onLogout, syncing }) {
           )}
         </div>
       )}
-
       {tab==="orders" && <OrdersPanel orders={orders.filter(o=>o.status!=="scheduled")} color={r.color} userRole="chef" mutate={mutate} userName={user.name} />}
       {tab==="sched"  && <ScheduledPanel orders={scheduled} color={r.color} mutate={mutate} />}
       {tab==="needs"  && <NeedsPanel needs={needs} rId={r.id} user={user} mutate={mutate} color={r.color} isManager db={db} />}
       {tab==="res"    && <ReservationsPanel reservations={reservations||[]} rId={r.id} user={user} mutate={mutate} color={r.color} />}
-
     </Shell>
   );
 }
 
+// ── CASHIER APP ───────────────────────────────────────────────────────────────
 function CashierApp({ db, mutate, session, onLogout, syncing }) {
   const [tab, setTab] = useState("cash");
   const { restaurant:r, user } = session;
-  const menu   = db.menus?.[r.id] || [];
   const orders = (db.orders||[]).filter(o => o.rId===r.id);
-  const needs  = (db.needs||[]).filter(n => n.rId===r.id);
-  const reservations = (db.reservations||[]).filter(rv => rv.rId===r.id);
   const toEnc  = orders.filter(o => ["ready","served"].includes(o.status));
   const paidToday = orders.filter(o => o.status==="paid" && fmtD(o.createdAt)===fmtD(ts()));
   const todayCA = paidToday.reduce((s,o)=>s+o.total,0);
-  const upcomingRes = reservations.filter(rv => !rv.done && new Date(rv.date) >= new Date(new Date().setHours(0,0,0,0)));
 
-
-
-  const tabs = [
-    { id:"cash", icon:"💳", label:"Caisse", badge: toEnc.length },
-  ];
+  const tabs = [{ id:"cash", icon:"💳", label:"Caisse", badge: toEnc.length }];
 
   return (
     <Shell session={session} onLogout={onLogout} tabs={tabs} activeTab={tab} setTab={setTab} syncing={syncing}>
-
-      {/* ── CAISSE ── */}
-      {tab==="cash" && (
-        <div>
-          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
-            <StatCard icon="💰" label="CA Aujourd'hui" val={`${todayCA.toFixed(2)}€`} color={r.color} />
-            <StatCard icon="✅" label="Payées" val={paidToday.length} color="#10b981" />
-            <StatCard icon="⏳" label="À encaisser" val={toEnc.length} color="#f59e0b" />
-          </div>
-          <Lbl>💳 À ENCAISSER ({toEnc.length})</Lbl>
-          {toEnc.length===0 ? <Empty icon="☕" text="Rien à encaisser" /> :
-            toEnc.map(o => <CashierOrderCard key={o.id} order={o} color={r.color} mutate={mutate} userName={user.name} rId={r.id} />)}
-          <Lbl style={{ marginTop:20 }}>📜 PAYÉES AUJOURD'HUI</Lbl>
-          {paidToday.length===0 ? <Empty icon="📋" text="Aucune" /> :
-            paidToday.map(o => <OrderCard key={o.id} order={o} color="#10b981" userRole="cashier" mutate={mutate} userName={user.name} readonly />)}
-        </div>
-      )}
-
-      {/* ── CAISSE ── */}
       {tab==="cash" && (
         <div>
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16 }}>
@@ -1141,6 +1126,7 @@ function CashierApp({ db, mutate, session, onLogout, syncing }) {
   );
 }
 
+// ── WAITER APP ────────────────────────────────────────────────────────────────
 function WaiterApp({ db, mutate, session, onLogout, syncing }) {
   const { restaurant:r, user } = session;
   const toServe = (db.orders||[]).filter(o => o.rId===r.id && o.status==="ready");
@@ -1155,8 +1141,7 @@ function WaiterApp({ db, mutate, session, onLogout, syncing }) {
   );
 }
 
-
-// ── CASHIER ORDER CARD — with payment modal ───────────────────────────────────
+// ── CASHIER ORDER CARD ────────────────────────────────────────────────────────
 function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
   const [open, setOpen] = useState(true);
   const [paying, setPaying] = useState(false);
@@ -1177,7 +1162,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
 
   return (
     <div style={{ background:"#0c0c0c",borderRadius:14,marginBottom:12,border:`2px solid ${color}55`,overflow:"hidden" }}>
-      {/* Payment modal */}
       {paying && (
         <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20 }}>
           <div style={{ background:"#111",borderRadius:20,padding:24,width:"100%",maxWidth:380,border:`2px solid ${color}44` }}>
@@ -1187,7 +1171,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
               <div style={{ fontSize:18,fontWeight:900,color:"#fff",marginBottom:8 }}>{o.client}</div>
               <div style={{ fontSize:28,fontWeight:900,color:color,textAlign:"center",padding:"8px 0" }}>{o.total.toFixed(2)} €</div>
             </div>
-            {/* Payment method */}
             <div style={{ color:"#555",fontSize:10,letterSpacing:2,marginBottom:10 }}>MODE DE PAIEMENT</div>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16 }}>
               {[["cash","💵","Espèces"],["card","💳","Carte"],["bancontact","📱","Bancontact"]].map(([v,ic,lb]) => (
@@ -1198,7 +1181,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
                 </button>
               ))}
             </div>
-            {/* Cash: montant reçu + rendu */}
             {payMethod === "cash" && (
               <div style={{ marginBottom:16 }}>
                 <div style={{ color:"#555",fontSize:10,letterSpacing:2,marginBottom:8 }}>MONTANT REÇU</div>
@@ -1207,7 +1189,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
                     style={{ flex:1,background:"#1a1a1a",border:"1px solid #333",borderRadius:8,padding:"12px",color:"#fff",fontSize:18,outline:"none",textAlign:"right" }} />
                   <span style={{ display:"flex",alignItems:"center",color:"#fff",fontSize:18,fontWeight:700 }}>€</span>
                 </div>
-                {/* Quick amount buttons */}
                 <div style={{ display:"flex",gap:6,flexWrap:"wrap" }}>
                   {[Math.ceil(o.total), Math.ceil(o.total/5)*5, Math.ceil(o.total/10)*10, Math.ceil(o.total/20)*20, Math.ceil(o.total/50)*50].filter((v,i,a)=>a.indexOf(v)===i).slice(0,5).map(amt => (
                     <button key={amt} onClick={()=>setReceived(amt.toString())}
@@ -1237,7 +1218,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
           </div>
         </div>
       )}
-
       <div style={{ padding:"12px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:10 }} onClick={()=>setOpen(!open)}>
         <div style={{ width:10,height:10,borderRadius:"50%",background:sc.color,flexShrink:0,boxShadow:`0 0 8px ${sc.color}` }} />
         <div style={{ flex:1 }}>
@@ -1254,7 +1234,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
         </div>
         <span style={{ color:"#333",fontSize:11 }}>{open?"▲":"▼"}</span>
       </div>
-
       {open && (
         <div style={{ padding:"0 14px 14px",borderTop:"1px solid #141414" }}>
           {o.items.map((it,i)=>(
@@ -1275,7 +1254,6 @@ function CashierOrderCard({ order:o, color, mutate, userName, rId }) {
     </div>
   );
 }
-
 
 // ── RESERVATIONS PANEL ────────────────────────────────────────────────────────
 function ReservationsPanel({ reservations = [], rId, user, mutate, color }) {
@@ -1305,7 +1283,6 @@ function ReservationsPanel({ reservations = [], rId, user, mutate, color }) {
         <Lbl>🪑 RÉSERVATIONS À VENIR ({upcoming.length})</Lbl>
         <button onClick={()=>setShowAdd(!showAdd)} style={{ background:`${color}22`,border:`1px solid ${color}44`,borderRadius:8,padding:"7px 14px",color,cursor:"pointer",fontWeight:700,fontSize:12 }}>+ Nouvelle</button>
       </div>
-
       {showAdd && (
         <Pane color={color} title="🪑 NOUVELLE RÉSERVATION">
           <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10 }}>
@@ -1343,7 +1320,6 @@ function ReservationsPanel({ reservations = [], rId, user, mutate, color }) {
           <BigBtn color={color} onClick={addRes} disabled={!client}>✅ Confirmer la réservation</BigBtn>
         </Pane>
       )}
-
       {upcoming.length === 0 ? <Empty icon="🪑" text="Aucune réservation à venir" /> :
         upcoming.map(res => {
           const d = new Date(res.date);
@@ -1394,7 +1370,6 @@ function ReservationsPanel({ reservations = [], rId, user, mutate, color }) {
             </div>
           );
         })}
-
       {past.length > 0 && (
         <>
           <Lbl style={{ marginTop:20 }}>📜 PASSÉES ({past.length})</Lbl>
@@ -1414,6 +1389,7 @@ function ReservationsPanel({ reservations = [], rId, user, mutate, color }) {
   );
 }
 
+// ── ORDER CARD ────────────────────────────────────────────────────────────────
 function OrderCard({ order:o, color, userRole, mutate, userName, readonly }) {
   const [open, setOpen] = useState(o.status==="pending");
   const sc = SC[o.status]; if (!sc) return null;
@@ -1460,6 +1436,7 @@ function OrderCard({ order:o, color, userRole, mutate, userName, readonly }) {
   );
 }
 
+// ── SCHEDULED PANEL ───────────────────────────────────────────────────────────
 function ScheduledPanel({ orders, color, mutate }) {
   const sorted = [...orders].sort((a,b)=>new Date(a.pickupAt)-new Date(b.pickupAt));
   return (
@@ -1489,6 +1466,7 @@ function ScheduledPanel({ orders, color, mutate }) {
   );
 }
 
+// ── ORDERS PANEL ──────────────────────────────────────────────────────────────
 function OrdersPanel({ orders, color, userRole, mutate, userName }) {
   const [f, setF] = useState("active");
   const shown = f==="active"?orders.filter(o=>o.status!=="paid"):orders;
@@ -1504,11 +1482,11 @@ function OrdersPanel({ orders, color, userRole, mutate, userName }) {
   );
 }
 
+// ── NEEDS PANEL ───────────────────────────────────────────────────────────────
 function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
   const [activecat, setActiveCat] = useState(null);
-  const [manualText, setManualText] = useState("");
   const [qty, setQty] = useState("1");
-  const [view, setView] = useState("current"); // current | history
+  const [view, setView] = useState("current");
   const [showHistoryList, setShowHistoryList] = useState(null);
 
   const shoppingLists = (db?.shoppingLists||[]).filter(l => l.rId === rId)
@@ -1518,7 +1496,7 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
     if (!text?.trim()) return;
     const need = { id:uid(), rId, text:text.trim(), category:category||"Autre", by:user.name, avatar:user.avatar, createdAt:ts(), done:false, received:false };
     mutate(d=>{ d.needs.push(need); return d; }, { type:"need", data:need });
-    setManualText(""); setQty("1");
+    setQty("1");
   }, [rId, user, mutate]);
 
   const addProduct = (product, cat) => {
@@ -1526,12 +1504,10 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
     addNeed(text, cat);
   };
 
-  // Mark item as received (checkbox)
   const toggleReceived = (id) => {
     mutate(d=>{ const x=d.needs.find(i=>i.id===id); if(x) x.received=!x.received; return d; });
   };
 
-  // Validate entire list → save to history + clear
   const validateList = () => {
     const pending = needs.filter(n=>!n.done && n.rId===rId);
     if (pending.length === 0) return;
@@ -1552,7 +1528,6 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
     });
   };
 
-  // Reuse a historical list
   const reuseList = (list) => {
     list.items.forEach(item => {
       const need = { id:uid(), rId, text:item.text, category:item.category||"Autre", by:user.name, avatar:user.avatar, createdAt:ts(), done:false, received:false };
@@ -1563,13 +1538,11 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
   };
 
   const pending = needs.filter(n=>!n.done);
-  const done = needs.filter(n=>n.done);
   const cats = Object.keys(NEEDS_CATALOG);
   const receivedCount = pending.filter(n=>n.received).length;
 
   return (
     <div>
-      {/* View toggle */}
       <div style={{ display:"flex",gap:8,marginBottom:16 }}>
         <button onClick={()=>setView("current")}
           style={{ flex:1,padding:"10px",borderRadius:10,border:`2px solid ${view==="current"?"#3b82f6":"#2a2a2a"}`,background:view==="current"?"#3b82f622":"transparent",color:view==="current"?"#3b82f6":"#666",cursor:"pointer",fontWeight:700,fontSize:12 }}>
@@ -1581,10 +1554,8 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
         </button>
       </div>
 
-      {/* ── CURRENT LIST ── */}
       {view === "current" && (
         <div>
-          {/* Category selector */}
           <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:16 }}>
             {cats.map(cat => {
               const c = NEEDS_CATALOG[cat];
@@ -1598,7 +1569,6 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
             })}
           </div>
 
-          {/* Products grid */}
           {activecat && (
             <div style={{ background:"#0c0c0c",borderRadius:14,padding:14,marginBottom:16,border:`1px solid ${NEEDS_CATALOG[activecat].color}33` }}>
               <div style={{ color:NEEDS_CATALOG[activecat].color,fontSize:10,letterSpacing:2,fontWeight:700,marginBottom:12 }}>
@@ -1628,12 +1598,10 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
             </div>
           )}
 
-          {/* Manual/voice input */}
           <Pane color="#3b82f6" title="✍️ SAISIE MANUELLE OU VOCALE">
             <VoiceInput onSubmit={(t)=>addNeed(t, activecat||"Autre")} placeholder='Ex: "sauce tomate × 3"' buttonLabel="Ajouter" />
           </Pane>
 
-          {/* Pending list with checkboxes */}
           {pending.length > 0 && (
             <div>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
@@ -1645,7 +1613,6 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
                   </button>
                 )}
               </div>
-              {/* Progress bar */}
               {receivedCount > 0 && (
                 <div style={{ background:"#1a1a1a",borderRadius:20,height:6,marginBottom:12,overflow:"hidden" }}>
                   <div style={{ background:"#16a34a",height:"100%",width:`${(receivedCount/pending.length)*100}%`,transition:"width .3s",borderRadius:20 }} />
@@ -1664,7 +1631,6 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
                     </div>
                     {catNeeds.map(n=>(
                       <div key={n.id} style={{ background:n.received?"#0a140a":"#0a0f1a",border:`1px solid ${n.received?"#16a34a44":"#1e3050"}`,borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,transition:"all .2s" }}>
-                        {/* Checkbox */}
                         <button onClick={()=>toggleReceived(n.id)}
                           style={{ width:28,height:28,borderRadius:6,border:`2px solid ${n.received?"#16a34a":c.color||"#3b82f6"}`,background:n.received?"#16a34a":"transparent",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,transition:"all .2s" }}>
                           {n.received ? "✓" : ""}
@@ -1688,7 +1654,6 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
         </div>
       )}
 
-      {/* ── HISTORY VIEW ── */}
       {view === "history" && (
         <div>
           {shoppingLists.length === 0 ? <Empty icon="📋" text="Aucun historique" /> :
@@ -1723,7 +1688,7 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
                 ))}
               </div>
             ) : (
-              shoppingLists.map((list, i) => (
+              shoppingLists.map((list) => (
                 <div key={list.id} onClick={()=>setShowHistoryList(list)}
                   style={{ background:"#0c0c0c",borderRadius:12,padding:"14px 16px",marginBottom:10,border:"1px solid #1e1e1e",cursor:"pointer",transition:"all .2s" }}
                   onMouseOver={e=>e.currentTarget.style.borderColor="#f59e0b"}
@@ -1753,11 +1718,7 @@ function NeedsPanel({ needs, rId, user, mutate, color, isManager, db }) {
   );
 }
 
-
-function StockPanel({ inventory, color }) {
-  return (<div><Lbl>INVENTAIRE</Lbl>{inventory.map(item=>{const crit=item.qty<=item.min;return(<div key={item.id} style={{ background:"#0c0c0c",borderRadius:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${crit?"#ef4444":"#181818"}`,display:"flex",alignItems:"center",gap:12 }}>{crit&&<span>⚠️</span>}<div style={{ flex:1 }}><div style={{ fontWeight:700 }}>{item.name}</div><div style={{ fontSize:11,color:"#444" }}>Min: {item.min} {item.unit}</div></div><div style={{ textAlign:"center" }}><div style={{ fontSize:21,fontWeight:900,color:crit?"#ef4444":"#10b981" }}>{item.qty}</div><div style={{ fontSize:11,color:"#555" }}>{item.unit}</div></div></div>);})}</div>);
-}
-
+// ── SUPER ADMIN ───────────────────────────────────────────────────────────────
 function SuperAdmin({ db, mutate, onLogout, syncing }) {
   const [tab, setTab] = useState("restaurants");
   const [nr, setNr] = useState({ name:"",logo:"🍽️",color:"#D4A017",address:"" });
@@ -1814,7 +1775,6 @@ function SI({ ph, val, set, type="text" }) { return <input type={type} placehold
 function BigBtn({ color, onClick, children, disabled, style={} }) { return <button onClick={onClick} disabled={disabled} style={{ width:"100%",background:disabled?"#141414":`linear-gradient(135deg,${color},${color}aa)`,border:"none",borderRadius:10,padding:13,color:disabled?"#333":"#060606",fontWeight:900,cursor:disabled?"not-allowed":"pointer",fontSize:14,letterSpacing:1,fontFamily:"Georgia,serif",...style }}>{children}</button>; }
 function QB({ onClick, children }) { return <button onClick={onClick} style={{ width:28,height:28,borderRadius:6,border:"1px solid #222",background:"#141414",color:"#fff",cursor:"pointer",fontWeight:900,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}>{children}</button>; }
 function RR({ l, v, c, bold }) { return <div style={{ display:"flex",justifyContent:"space-between",padding:"4px 0",fontSize:13 }}><span style={{ color:"#555" }}>{l}</span><span style={{ color:c||"#fff",fontWeight:bold?900:400 }}>{v}</span></div>; }
-function ModeBtn({ active, color="#D4A017", onClick, children }) { return <button onClick={onClick} style={{ flex:1,padding:"8px",borderRadius:8,border:`2px solid ${active?color:"#222"}`,background:active?`${color}22`:"transparent",color:active?color:"#555",cursor:"pointer",fontWeight:700,fontSize:12 }}>{children}</button>; }
 function StatCard({ icon, label, val, color }) { return <div style={{ background:"#0c0c0c",borderRadius:12,padding:14,border:`1px solid ${color}22`,textAlign:"center" }}><div style={{ fontSize:24 }}>{icon}</div><div style={{ fontSize:21,fontWeight:900,color,margin:"4px 0" }}>{val}</div><div style={{ fontSize:11,color:"#444" }}>{label}</div></div>; }
 function Lbl({ children, style={} }) { return <div style={{ color:"#444",fontSize:10,letterSpacing:3,marginBottom:9,...style }}>{children}</div>; }
 function Empty({ icon, text }) { return <div style={{ textAlign:"center",padding:"36px 20px",color:"#2a2a2a" }}><div style={{ fontSize:44,marginBottom:10 }}>{icon}</div><div style={{ fontSize:14 }}>{text}</div></div>; }
